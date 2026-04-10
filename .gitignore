@@ -1,0 +1,18 @@
+.DS_Store
+
+# Local Codex/editor state
+.codex/
+
+# Xcode user-specific files
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Build artifacts
+build/
+DerivedData/
+
