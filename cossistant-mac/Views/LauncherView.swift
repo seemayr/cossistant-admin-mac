@@ -434,10 +434,10 @@ struct GlobalServiceSettingsCard: View {
           )
         ) {
           VStack(alignment: .leading, spacing: 2) {
-            Text("Auto mark seen on open")
+            Text("Auto mark read on open")
               .font(.subheadline.weight(.semibold))
 
-            Text("When enabled, opening an unread conversation sends the seen marker automatically.")
+            Text("When enabled, opening an unread conversation marks it as read for the current teammate.")
               .font(.caption)
               .foregroundStyle(.secondary)
           }

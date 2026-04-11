@@ -979,25 +979,18 @@ final class AppModel {
     }
   }
 
-  func markSelectedConversationSeen(visitorID: String) async {
+  func markSelectedConversationRead() async {
     guard let conversationID = selectedConversationID else { return }
-    await markConversationSeen(conversationID, visitorID: visitorID)
+    await markConversationRead(conversationID)
   }
 
-  func markConversationSeen(
-    _ conversationID: DashboardConversation.ID,
-    visitorID: String
-  ) async {
+  func markConversationRead(_ conversationID: DashboardConversation.ID) async {
     errorMessage = nil
 
     do {
       let client = DashboardAPIClient(configuration: configuration)
-      await realtimeClient?.send(.conversationSeen(conversationId: conversationID))
-      let response = try await client.markConversationSeen(
-        conversationID: conversationID,
-        payload: DashboardMarkConversationSeenRequest(visitorId: visitorID)
-      )
-      updateConversationLastSeenAt(conversationID: conversationID, lastSeenAt: response.lastSeenAt)
+      let updatedConversation = try await client.markConversationRead(conversationID: conversationID)
+      applyMutatedConversation(updatedConversation)
       if selectedConversationID == conversationID {
         selectedSeenData = try await client.fetchConversationSeenData(conversationID: conversationID)
       }
@@ -1059,8 +1052,18 @@ final class AppModel {
   }
 
   func markConversationUnread(_ conversationID: DashboardConversation.ID) async {
-    await mutateConversation(conversationID) { client in
-      try await client.markConversationUnread(conversationID: conversationID)
+    errorMessage = nil
+
+    do {
+      let client = DashboardAPIClient(configuration: configuration)
+      let updatedConversation = try await client.markConversationUnread(conversationID: conversationID)
+      applyMutatedConversation(updatedConversation)
+
+      if selectedConversationID == conversationID {
+        selectedSeenData = try await client.fetchConversationSeenData(conversationID: conversationID)
+      }
+    } catch {
+      setGlobalErrorMessage(error)
     }
   }
 
@@ -1523,8 +1526,10 @@ final class AppModel {
   private func scheduleMetadataHydrationIfNeeded() {
     guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
+    var seenVisitorIDs: Set<String> = []
     let missingVisitorIDs = conversations
       .map(\.visitorId)
+      .filter { seenVisitorIDs.insert($0).inserted }
       .filter { visitorSearchIndex[$0] == nil }
 
     guard !missingVisitorIDs.isEmpty else { return }
@@ -1563,8 +1568,6 @@ final class AppModel {
     ]
       .compactMap(Self.nonEmpty(_:))
       .joined(separator: " ")
-
-    guard !searchableText.isEmpty else { return }
 
     var updatedIndex = visitorSearchIndex
     updatedIndex[visitor.id] = searchableText
@@ -1850,7 +1853,7 @@ final class AppModel {
       updatedAt: updatedConversation.updatedAt,
       deletedAt: updatedConversation.deletedAt,
       lastMessageAt: updatedConversation.lastMessageAt,
-      lastSeenAt: existing.lastSeenAt,
+      lastSeenAt: updatedConversation.lastSeenAt,
       escalatedAt: updatedConversation.escalatedAt,
       escalationHandledAt: updatedConversation.escalationHandledAt,
       aiPausedUntil: updatedConversation.aiPausedUntil,

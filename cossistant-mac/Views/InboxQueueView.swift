@@ -309,10 +309,10 @@ private struct InboxConversationRow: View {
       if conversation.hasUnreadActivity {
         Button {
           Task {
-            await model.markConversationSeen(conversation.id, visitorID: conversation.visitorId)
+            await model.markConversationRead(conversation.id)
           }
         } label: {
-          Label("Mark Seen", systemSymbol: .checkmarkCircle)
+          Label("Mark Read", systemSymbol: .checkmarkCircle)
         }
       } else {
         Button {

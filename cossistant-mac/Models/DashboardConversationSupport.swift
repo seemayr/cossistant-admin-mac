@@ -38,15 +38,6 @@ struct DashboardConversationSeen: Identifiable, Decodable, Hashable, Sendable {
   }
 }
 
-struct DashboardMarkConversationSeenRequest: Encodable, Sendable {
-  var visitorId: String?
-}
-
-struct DashboardMarkConversationSeenResponse: Decodable, Sendable {
-  let conversationId: String
-  let lastSeenAt: String
-}
-
 struct DashboardConversationTypingRequest: Encodable, Sendable {
   let isTyping: Bool
   var visitorPreview: String?
@@ -123,6 +114,7 @@ struct DashboardConversationMutation: Decodable, Sendable {
   let updatedAt: String
   let deletedAt: String?
   let lastMessageAt: String?
+  let lastSeenAt: String?
 }
 
 struct DashboardConversationMutationResponse: Decodable, Sendable {

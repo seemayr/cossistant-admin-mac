@@ -377,7 +377,7 @@ private struct ConversationThreadHeaderView: View {
                 await onMarkConversationSeen()
               }
             } label: {
-              Label("Mark Seen", systemSymbol: .checkmarkCircle)
+              Label("Mark Read", systemSymbol: .checkmarkCircle)
             }
           } else {
             Button {

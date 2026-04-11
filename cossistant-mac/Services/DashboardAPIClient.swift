@@ -103,15 +103,14 @@ final class DashboardAPIClient {
     return response.seenData
   }
 
-  func markConversationSeen(
-    conversationID: DashboardConversation.ID,
-    payload: DashboardMarkConversationSeenRequest
-  ) async throws -> DashboardMarkConversationSeenResponse {
-    try await request(
+  func markConversationRead(
+    conversationID: DashboardConversation.ID
+  ) async throws -> DashboardConversationMutation {
+    let response: DashboardConversationMutationResponse = try await request(
       method: "POST",
-      path: "conversations/\(conversationID)/seen",
-      body: payload
+      path: "conversations/\(conversationID)/read"
     )
+    return response.conversation
   }
 
   func setConversationTyping(

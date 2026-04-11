@@ -91,7 +91,7 @@ struct ContentView: View {
         }
       }
 
-      await model.markSelectedConversationSeen(visitorID: selectedConversation.visitorId)
+      await model.markSelectedConversationRead()
     }
     .task(id: selectedContactID) {
       guard let selectedContactID else { return }
@@ -224,8 +224,7 @@ struct ContentView: View {
           }
         },
         onMarkConversationSeen: {
-          guard let selectedConversation = model.selectedConversation else { return }
-          await model.markSelectedConversationSeen(visitorID: selectedConversation.visitorId)
+          await model.markSelectedConversationRead()
         },
         onMarkConversationUnread: {
           guard let selectedConversationID = model.selectedConversationID else { return }
