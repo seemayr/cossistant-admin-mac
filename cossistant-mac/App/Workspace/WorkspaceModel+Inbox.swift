@@ -35,7 +35,13 @@ extension WorkspaceModel {
       .filter { $0.status == .open }
       .filter { autoResolveShouldReview($0) }
 
-    return inboxStore.sortConversations(scopedConversations)
+    return scopedConversations.sorted {
+      if $0.latestActivityDate != $1.latestActivityDate {
+        return $0.latestActivityDate < $1.latestActivityDate
+      }
+
+      return ($0.createdAtDate ?? .distantPast) < ($1.createdAtDate ?? .distantPast)
+    }
   }
 
   func autoResolveShouldReview(_ conversation: DashboardConversation) -> Bool {

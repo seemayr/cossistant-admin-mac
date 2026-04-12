@@ -67,6 +67,7 @@ final class AutoResolveCoordinator {
     }
 
     store.results = []
+    store.inspectedConversationID = nil
     log("Starting auto-resolve for \(candidates.count) conversations in \(scope.rawValue) queue")
     store.task = Task {
       await self.run(in: scope)
@@ -87,6 +88,7 @@ final class AutoResolveCoordinator {
 
   func clearResults() {
     store.results = []
+    store.inspectedConversationID = nil
     store.statusMessage = nil
   }
 

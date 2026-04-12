@@ -375,6 +375,26 @@ struct WorkspaceRootView: View {
     case .aiAutoResolve:
       AIAutoResolveWorkspaceView(
         store: model.autoResolveStore,
+        inspectedConversation: model.autoResolveStore.inspectedConversationID == model.selectedConversationID
+          ? model.selectedConversation
+          : nil,
+        inspectedVisitor: model.autoResolveStore.inspectedConversationID == model.selectedConversationID
+          ? model.selectedVisitor
+          : nil,
+        inspectedTimelineItems: model.autoResolveStore.inspectedConversationID == model.selectedConversationID
+          ? model.selectedTimelineItems
+          : [],
+        inspectedSeenData: model.autoResolveStore.inspectedConversationID == model.selectedConversationID
+          ? model.selectedSeenData
+          : [],
+        translatedMessagesByID: model.translatedMessagesByID,
+        canUseMessageTranslations: model.canUseMessageTranslations,
+        showTranslations: model.showMessageTranslations,
+        isTranslatingMessages: model.isTranslatingMessages,
+        translationErrorMessage: model.translationErrorMessage,
+        loadState: model.selectedConversationLoadState,
+        canLoadMoreTimeline: model.canLoadMoreTimeline,
+        isLoadingMoreTimeline: model.isLoadingMoreTimeline,
         canStart: model.canStartAutoResolve,
         onStart: {
           model.startAutoResolve()
@@ -385,12 +405,23 @@ struct WorkspaceRootView: View {
         onClearResults: {
           model.clearAutoResolveResults()
         },
+        onInspectConversation: { conversationID in
+          await model.inspectAutoResolveConversation(conversationID)
+        },
         onOpenConversation: { conversationID in
           workspaceStore.selectedRoute = .inbox(.all)
           model.selectedConversationID = conversationID
         },
         onResolveAnyway: { conversationID in
           await model.resolveAutoResolveResult(conversationID)
+        },
+        onSetShowTranslations: { isEnabled in
+          await model.setShowMessageTranslations(isEnabled)
+        },
+        onLoadMoreTimeline: {
+          Task {
+            await model.loadMoreTimeline()
+          }
         }
       )
     case .faq:

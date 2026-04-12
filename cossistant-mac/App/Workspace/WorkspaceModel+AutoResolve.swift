@@ -2,6 +2,12 @@ import Foundation
 
 @MainActor
 extension WorkspaceModel {
+  func inspectAutoResolveConversation(_ conversationID: DashboardConversation.ID) async {
+    autoResolveStore.inspectedConversationID = conversationID
+    selectedConversationID = conversationID
+    await loadSelectedConversation(force: false, showsLoadingState: true)
+  }
+
   func startAutoResolve() {
     makeAutoResolveCoordinator().start()
   }

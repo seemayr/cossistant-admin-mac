@@ -3,39 +3,58 @@ import SFSafeSymbols
 
 struct AIAutoResolveWorkspaceView: View {
   @Bindable var store: AutoResolveStore
+  let inspectedConversation: DashboardConversation?
+  let inspectedVisitor: DashboardVisitor?
+  let inspectedTimelineItems: [DashboardTimelineItem]
+  let inspectedSeenData: [DashboardConversationSeen]
+  let translatedMessagesByID: [String: DashboardMessageTranslation]
+  let canUseMessageTranslations: Bool
+  let showTranslations: Bool
+  let isTranslatingMessages: Bool
+  let translationErrorMessage: String?
+  let loadState: ConversationSelectionLoadState
+  let canLoadMoreTimeline: Bool
+  let isLoadingMoreTimeline: Bool
   let canStart: Bool
   let onStart: () -> Void
   let onCancel: () -> Void
   let onClearResults: () -> Void
+  let onInspectConversation: (String) async -> Void
   let onOpenConversation: (String) -> Void
   let onResolveAnyway: (String) async -> Void
+  let onSetShowTranslations: (Bool) async -> Void
+  let onLoadMoreTimeline: () -> Void
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        Text("Auto-Resolve")
-          .font(.largeTitle.weight(.semibold))
+    HSplitView {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 20) {
+          Text("Auto-Resolve")
+            .font(.largeTitle.weight(.semibold))
 
-        Text("Review recent conversations one by one with AI, automatically resolve safe cases, and inspect a running decision list as results come in.")
-          .font(.title3)
-          .foregroundStyle(.secondary)
+          Text("Review recent conversations one by one with AI, automatically resolve safe cases, and inspect a running decision list as results come in.")
+            .font(.title3)
+            .foregroundStyle(.secondary)
 
-        autoResolveControlsCard
+          autoResolveControlsCard
 
-        if let status = store.statusMessage {
-          Label(
-            status,
-            systemSymbol: store.isRunning ? .clockArrowTriangleheadCounterclockwiseRotate90 : .sparkles
-          )
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
+          if let status = store.statusMessage {
+            Label(
+              status,
+              systemSymbol: store.isRunning ? .clockArrowTriangleheadCounterclockwiseRotate90 : .sparkles
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+          }
+
+          autoResolveResultsCard
         }
-
-        autoResolveResultsCard
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
       }
-      .padding(24)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .textSelection(.enabled)
+
+      autoResolveInspectorColumn
     }
   }
 
@@ -99,6 +118,10 @@ struct AIAutoResolveWorkspaceView: View {
           ForEach(store.results) { result in
             AutoResolveResultRow(
               result: result,
+              isSelected: result.conversationID == store.inspectedConversationID,
+              onInspectConversation: {
+                await onInspectConversation(result.conversationID)
+              },
               onOpenConversation: {
                 onOpenConversation(result.conversationID)
               },
@@ -111,58 +134,94 @@ struct AIAutoResolveWorkspaceView: View {
       }
     }
   }
+
+  private var autoResolveInspectorColumn: some View {
+    AutoResolveConversationInspectorView(
+      conversation: inspectedConversation,
+      visitor: inspectedVisitor,
+      timelineItems: inspectedTimelineItems,
+      seenData: inspectedSeenData,
+      translatedMessagesByID: translatedMessagesByID,
+      canUseMessageTranslations: canUseMessageTranslations,
+      showTranslations: showTranslations,
+      isTranslatingMessages: isTranslatingMessages,
+      translationErrorMessage: translationErrorMessage,
+      loadState: loadState,
+      canLoadMoreTimeline: canLoadMoreTimeline,
+      isLoadingMoreTimeline: isLoadingMoreTimeline,
+      onSetShowTranslations: onSetShowTranslations,
+      onLoadMoreTimeline: onLoadMoreTimeline
+    )
+    .frame(
+      minWidth: ConversationWorkspaceLayout.inspectorMinWidth,
+      idealWidth: ConversationWorkspaceLayout.inspectorIdealWidth,
+      maxWidth: 520,
+      maxHeight: .infinity
+    )
+  }
 }
 
 private struct AutoResolveResultRow: View {
   let result: AutoResolveResult
+  let isSelected: Bool
+  let onInspectConversation: () async -> Void
   let onOpenConversation: () -> Void
   let onResolveAnyway: () async -> Void
   @State private var isShowingRawResponse = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text(result.outcome.label)
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(outcomeColor)
-          .padding(.horizontal, 8)
-          .padding(.vertical, 4)
-          .background(outcomeColor.opacity(0.12), in: .capsule)
-
-        Text(result.title)
-          .font(.headline)
-          .foregroundStyle(.primary)
-          .multilineTextAlignment(.leading)
-
-        Spacer(minLength: 0)
-      }
-
-      HStack(spacing: 8) {
-        Text(result.category.label)
-          .font(.caption.weight(.medium))
-          .foregroundStyle(.secondary)
-          .padding(.horizontal, 8)
-          .padding(.vertical, 4)
-          .background(.secondary.opacity(0.12), in: .capsule)
-
-        if let aiMarkedResolved = result.aiMarkedResolved {
-          Text(aiMarkedResolved ? "AI: Resolved" : "AI: Not resolved")
-            .font(.caption.weight(.medium))
-            .foregroundStyle(aiMarkedResolved ? .green : .orange)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background((aiMarkedResolved ? Color.green : .orange).opacity(0.12), in: .capsule)
+      Button {
+        Task {
+          await onInspectConversation()
         }
+      } label: {
+        VStack(alignment: .leading, spacing: 8) {
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(result.outcome.label)
+              .font(.caption.weight(.semibold))
+              .foregroundStyle(outcomeColor)
+              .padding(.horizontal, 8)
+              .padding(.vertical, 4)
+              .background(outcomeColor.opacity(0.12), in: .capsule)
 
-        Spacer(minLength: 0)
-      }
+            Text(result.title)
+              .font(.headline)
+              .foregroundStyle(.primary)
+              .multilineTextAlignment(.leading)
 
-      if let body = result.body, !body.isEmpty {
-        Text(body)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+          }
+
+          HStack(spacing: 8) {
+            Text(result.category.label)
+              .font(.caption.weight(.medium))
+              .foregroundStyle(.secondary)
+              .padding(.horizontal, 8)
+              .padding(.vertical, 4)
+              .background(.secondary.opacity(0.12), in: .capsule)
+
+            if let aiMarkedResolved = result.aiMarkedResolved {
+              Text(aiMarkedResolved ? "AI: Resolved" : "AI: Not resolved")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(aiMarkedResolved ? .green : .orange)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background((aiMarkedResolved ? Color.green : .orange).opacity(0.12), in: .capsule)
+            }
+
+            Spacer(minLength: 0)
+          }
+
+          if let body = result.body, !body.isEmpty {
+            Text(body)
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+              .multilineTextAlignment(.leading)
+          }
+        }
       }
+      .buttonStyle(.plain)
 
       if let decisionNote = result.decisionNote, !decisionNote.isEmpty {
         Text(decisionNote)
@@ -223,7 +282,7 @@ private struct AutoResolveResultRow: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(14)
-    .background(.quinary, in: .rect(cornerRadius: 16))
+    .background(rowBackground, in: .rect(cornerRadius: 16))
   }
 
   private var outcomeColor: Color {
@@ -237,5 +296,9 @@ private struct AutoResolveResultRow: View {
     case .notResolved:
       return .orange
     }
+  }
+
+  private var rowBackground: Color {
+    isSelected ? .secondary.opacity(0.16) : .secondary.opacity(0.08)
   }
 }
