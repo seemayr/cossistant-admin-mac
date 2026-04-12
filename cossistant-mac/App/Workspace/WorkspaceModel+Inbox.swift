@@ -33,8 +33,21 @@ extension WorkspaceModel {
       .filter { inboxStore.conversation($0, isIncludedIn: scope, isUnread: conversationHasUnreadActivity) }
       .filter { !$0.isArchived }
       .filter { $0.status == .open }
+      .filter { autoResolveShouldReview($0) }
 
     return inboxStore.sortConversations(scopedConversations)
+  }
+
+  func autoResolveShouldReview(_ conversation: DashboardConversation) -> Bool {
+    guard
+      let lastAutoResolveValue = conversation.metadata?[AutoResolveMetadataKey.lastAutoResolve],
+      case .string(let lastAutoResolveString) = lastAutoResolveValue,
+      let lastAutoResolveDate = DashboardTimestampParser.date(from: lastAutoResolveString)
+    else {
+      return true
+    }
+
+    return conversation.latestActivityDate > lastAutoResolveDate
   }
 
   func selectedInboxMetadataValue(for key: InboxMetadataFilterKey) -> JSONValue? {

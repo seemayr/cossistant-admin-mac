@@ -4,6 +4,7 @@ import Observation
 @Observable @MainActor
 final class ConversationStore {
   var selectedConversationDetail: DashboardConversationDetail?
+  var selectedConversationListSnapshot: DashboardConversation?
   var selectedVisitor: DashboardVisitor?
   var selectedSeenData: [DashboardConversationSeen] = []
   var selectedTimelineItems: [DashboardTimelineItem] = []
@@ -29,6 +30,7 @@ final class ConversationStore {
 
   func clearSelection() {
     selectedConversationDetail = nil
+    selectedConversationListSnapshot = nil
     selectedVisitor = nil
     selectedSeenData = []
     selectedTimelineItems = []

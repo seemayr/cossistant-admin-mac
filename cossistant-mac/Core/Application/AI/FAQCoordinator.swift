@@ -34,8 +34,7 @@ final class FAQCoordinator {
   func startOptimization() {
     guard store.optimizationTask == nil else { return }
 
-    store.optimizationTask = Task { [weak self] in
-      guard let self else { return }
+    store.optimizationTask = Task {
       await self.optimizeDraft()
       if !Task.isCancelled {
         self.store.optimizationTask = nil
@@ -46,8 +45,7 @@ final class FAQCoordinator {
   func startBuildFromSelectedConversation() {
     guard store.conversationBuildTask == nil else { return }
 
-    store.conversationBuildTask = Task { [weak self] in
-      guard let self else { return }
+    store.conversationBuildTask = Task {
       await self.buildFromSelectedConversation()
       if !Task.isCancelled {
         self.store.conversationBuildTask = nil

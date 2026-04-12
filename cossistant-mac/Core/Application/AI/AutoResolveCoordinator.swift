@@ -67,8 +67,8 @@ final class AutoResolveCoordinator {
     }
 
     store.results = []
-    store.task = Task { [weak self] in
-      guard let self else { return }
+    log("Starting auto-resolve for \(candidates.count) conversations in \(scope.rawValue) queue")
+    store.task = Task {
       await self.run(in: scope)
       if !Task.isCancelled {
         self.store.task = nil
@@ -123,6 +123,7 @@ final class AutoResolveCoordinator {
         try Task.checkCancellation()
 
         store.statusMessage = "Reviewing \(index + 1) of \(candidates.count)…"
+        log("Reviewing conversation \(conversation.id) (\(index + 1)/\(candidates.count))")
 
         if !conversation.hasContent {
           let updatedConversation = try await apiClient.resolveConversation(conversationID: conversation.id)
@@ -142,33 +143,51 @@ final class AutoResolveCoordinator {
           continue
         }
 
+        let items: [DashboardTimelineItem]
         do {
-          let items = try await fetchAIMessageItems(
+          items = try await fetchAIMessageItems(
             conversation.id,
             apiClient,
             20
           )
-          guard let transcript = buildConversationReviewDocument(
-            for: conversation,
-            items: items
-          ) else {
-            let updatedConversation = try await apiClient.resolveConversation(conversationID: conversation.id)
-            applyMutatedConversation(updatedConversation)
-            await refreshSelectedConversationIfNeeded(conversation.id)
-            resolvedWithoutAI += 1
-            store.results.append(
-              AutoResolveResult(
-                conversationID: conversation.id,
-                visitorID: conversation.visitorId,
-                outcome: .emptyResolved,
-                category: .unknown,
-                title: "Empty conversation",
-                body: "No visible message content was found, so the conversation was resolved automatically."
-              )
-            )
-            continue
+          log("Fetched \(items.count) timeline messages for conversation \(conversation.id)")
+        } catch {
+          if isIgnorableCancellation(error) {
+            throw error
           }
 
+          failed += 1
+          recordFailure(
+            title: "Timeline fetch failed",
+            conversation: conversation,
+            error: error
+          )
+          continue
+        }
+
+        guard let transcript = buildConversationReviewDocument(
+          for: conversation,
+          items: items
+        ) else {
+          let updatedConversation = try await apiClient.resolveConversation(conversationID: conversation.id)
+          applyMutatedConversation(updatedConversation)
+          await refreshSelectedConversationIfNeeded(conversation.id)
+          resolvedWithoutAI += 1
+          store.results.append(
+            AutoResolveResult(
+              conversationID: conversation.id,
+              visitorID: conversation.visitorId,
+              outcome: .emptyResolved,
+              category: .unknown,
+              title: "Empty conversation",
+              body: "No visible message content was found, so the conversation was resolved automatically."
+            )
+          )
+          log("Resolved conversation \(conversation.id) without AI because no visible message content was found")
+          continue
+        }
+
+        do {
           let verdict = try await aiClient.reviewConversation(
             transcript: transcript,
             websiteName: workspaceName,
@@ -186,7 +205,6 @@ final class AutoResolveCoordinator {
           }
           let shouldResolve = verdict.isResolved
             && !conversation.needsHumanIntervention
-            && !conversation.needsClarification
 
           if shouldResolve {
             let updatedConversation = try await apiClient.resolveConversation(conversationID: conversation.id)
@@ -198,9 +216,11 @@ final class AutoResolveCoordinator {
                 conversationID: conversation.id,
                 visitorID: conversation.visitorId,
                 outcome: .resolved,
+                aiMarkedResolved: verdict.isResolved,
                 category: verdict.category,
                 title: verdict.title,
-                body: verdict.body
+                body: verdict.body,
+                rawAIResponseText: verdict.rawResponseText
               )
             )
           } else {
@@ -210,9 +230,15 @@ final class AutoResolveCoordinator {
                 conversationID: conversation.id,
                 visitorID: conversation.visitorId,
                 outcome: .notResolved,
+                aiMarkedResolved: verdict.isResolved,
                 category: verdict.category,
                 title: verdict.title,
-                body: verdict.body
+                body: verdict.body,
+                decisionNote: decisionNote(
+                  for: conversation,
+                  aiMarkedResolved: verdict.isResolved
+                ),
+                rawAIResponseText: verdict.rawResponseText
               )
             )
           }
@@ -220,16 +246,12 @@ final class AutoResolveCoordinator {
           if isIgnorableCancellation(error) {
             throw error
           }
+
           failed += 1
-          store.results.append(
-            AutoResolveResult(
-              conversationID: conversation.id,
-              visitorID: conversation.visitorId,
-              outcome: .notResolved,
-              category: .unknown,
-              title: "Review failed",
-              body: "The conversation could not be reviewed automatically because the AI request or timeline fetch failed."
-            )
+          recordFailure(
+            title: "AI review failed",
+            conversation: conversation,
+            error: error
           )
         }
       }
@@ -247,6 +269,43 @@ final class AutoResolveCoordinator {
       store.task = nil
       setGlobalErrorMessage(error)
     }
+  }
+
+  private func recordFailure(
+    title: String,
+    conversation: DashboardConversation,
+    error: any Error
+  ) {
+    log("\(title) for conversation \(conversation.id) visitor \(conversation.visitorId): \(logMessage(for: error))")
+
+    store.results.append(
+      AutoResolveResult(
+        conversationID: conversation.id,
+        visitorID: conversation.visitorId,
+        outcome: .notResolved,
+        category: .unknown,
+        title: title,
+        body: displayMessage(for: error)
+      )
+    )
+  }
+
+  private func decisionNote(
+    for conversation: DashboardConversation,
+    aiMarkedResolved: Bool
+  ) -> String? {
+    guard aiMarkedResolved else { return nil }
+
+    var reasons: [String] = []
+    if conversation.needsHumanIntervention {
+      reasons.append("needsHumanIntervention")
+    }
+    if conversation.needsClarification {
+      reasons.append("needsClarification")
+    }
+    guard !reasons.isEmpty else { return nil }
+
+    return "AI marked this resolved, but the conversation stayed open because \(reasons.joined(separator: " and ")) is still set."
   }
 
   private func buildConversationReviewDocument(
@@ -295,18 +354,38 @@ final class AutoResolveCoordinator {
     for conversationID: DashboardConversation.ID,
     client: CossistantAPIClient
   ) async -> Bool {
+    let autoResolveTimestamp = ISO8601DateFormatter.internetDateTime.string(from: .now)
+
     do {
       let updatedConversation = try await client.updateConversationMetadata(
         conversationID: conversationID,
         metadata: [
-          InboxMetadataFilterKey.category.rawValue: .string(category.rawValue)
+          InboxMetadataFilterKey.category.rawValue: .string(category.rawValue),
+          AutoResolveMetadataKey.lastAutoResolve: .string(autoResolveTimestamp),
         ]
       )
       applyMutatedConversation(updatedConversation)
       await refreshSelectedConversationIfNeeded(conversationID)
       return true
     } catch {
+      log("Failed to persist auto-resolve category for conversation \(conversationID): \(logMessage(for: error))")
       return false
     }
+  }
+
+  private func displayMessage(for error: any Error) -> String {
+    let message = (error as NSError).localizedDescription
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return message.isEmpty ? "An unknown error occurred." : message
+  }
+
+  private func logMessage(for error: any Error) -> String {
+    let nsError = error as NSError
+    let description = displayMessage(for: error)
+    return "type=\(String(describing: type(of: error))) domain=\(nsError.domain) code=\(nsError.code) message=\(description)"
+  }
+
+  private func log(_ message: String) {
+    print("[AutoResolve]", message)
   }
 }

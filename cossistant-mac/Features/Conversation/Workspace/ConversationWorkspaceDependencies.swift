@@ -23,6 +23,7 @@ struct ConversationWorkspaceActions: Sendable {
   ) async -> Void
   typealias ReplyDraftAction = @MainActor @Sendable (String) async -> String?
   typealias TitleUpdateAction = @MainActor @Sendable (String?) async -> Void
+  typealias MetadataUpdateAction = @MainActor @Sendable (DashboardMetadata) async throws -> Void
   typealias PauseAIAction = @MainActor @Sendable (Int) async -> Void
   typealias AsyncAction = @MainActor @Sendable () async -> Void
   typealias SyncAction = @MainActor @Sendable () -> Void
@@ -44,8 +45,26 @@ struct ConversationWorkspaceActions: Sendable {
   let markConversationSpam: AsyncAction
   let markConversationNotSpam: AsyncAction
   let updateConversationTitle: TitleUpdateAction
+  let updateConversationMetadata: MetadataUpdateAction
   let joinConversationEscalation: AsyncAction
   let pauseConversationAI: PauseAIAction
   let resumeConversationAI: AsyncAction
   let loadMoreTimeline: SyncAction
+}
+
+struct ConversationSeenDebugState: Sendable {
+  let currentActorUserID: String?
+  let isManuallyMarkedUnread: Bool
+  let effectiveHasUnreadActivity: Bool
+  let rawHasUnreadActivity: Bool
+  let shouldAutoMarkSeenOnOpen: Bool
+  let autoSeenShouldAttempt: Bool
+  let routeTitle: String
+  let selectedConversationID: String?
+  let selectedConversationDetailID: String?
+  let loadStateDescription: String
+  let scenePhaseDescription: String
+  let controlActiveStateDescription: String
+  let realtimeConnectionDescription: String
+  let lastRealtimeEventAt: String?
 }

@@ -11,6 +11,11 @@ extension WorkspaceModel {
     set { conversationStore.selectedConversationDetail = newValue }
   }
 
+  var selectedConversationListSnapshot: DashboardConversation? {
+    get { conversationStore.selectedConversationListSnapshot }
+    set { conversationStore.selectedConversationListSnapshot = newValue }
+  }
+
   var selectedVisitor: DashboardVisitor? {
     get { conversationStore.selectedVisitor }
     set { conversationStore.selectedVisitor = newValue }

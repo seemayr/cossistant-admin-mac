@@ -100,6 +100,28 @@ extension WorkspaceModel {
     }
   }
 
+  func updateConversationMetadata(
+    _ conversationID: DashboardConversation.ID,
+    metadata: DashboardMetadata
+  ) async throws {
+    errorMessage = nil
+
+    do {
+      try await makeConversationActionsCoordinator().performConversationMutation(
+        conversationID,
+        using: { client in
+          try await client.updateConversationMetadata(
+            conversationID: conversationID,
+            metadata: metadata
+          )
+        }
+      )
+    } catch {
+      errorMessage = error.localizedDescription
+      throw error
+    }
+  }
+
   func joinConversationEscalation(_ conversationID: DashboardConversation.ID) async {
     errorMessage = nil
     await makeConversationActionsCoordinator().mutateConversation(conversationID) { client in

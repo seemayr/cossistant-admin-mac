@@ -169,19 +169,33 @@ final class ConversationActionsCoordinator {
     using operation: (CossistantAPIClient) async throws -> DashboardConversationMutation
   ) async {
     do {
-      let client = CossistantAPIClient(configuration: configuration)
-      let updatedConversation = try await operation(client)
-      applyMutatedConversation(
-        updatedConversation,
-        preserveExistingLastMessageAt,
-        preserveExistingLastSeenAt
+      try await performConversationMutation(
+        conversationID,
+        preserveExistingLastMessageAt: preserveExistingLastMessageAt,
+        preserveExistingLastSeenAt: preserveExistingLastSeenAt,
+        using: operation
       )
-
-      if selectedConversationID() == conversationID {
-        await refreshSelectedConversationIfNeeded(conversationID)
-      }
     } catch {
       setGlobalErrorMessage(error)
+    }
+  }
+
+  func performConversationMutation(
+    _ conversationID: DashboardConversation.ID,
+    preserveExistingLastMessageAt: Bool = false,
+    preserveExistingLastSeenAt: Bool = false,
+    using operation: (CossistantAPIClient) async throws -> DashboardConversationMutation
+  ) async throws {
+    let client = CossistantAPIClient(configuration: configuration)
+    let updatedConversation = try await operation(client)
+    applyMutatedConversation(
+      updatedConversation,
+      preserveExistingLastMessageAt,
+      preserveExistingLastSeenAt
+    )
+
+    if selectedConversationID() == conversationID {
+      await refreshSelectedConversationIfNeeded(conversationID)
     }
   }
 

@@ -270,6 +270,10 @@ struct WorkspaceRootView: View {
           guard let selectedConversationID = model.selectedConversationID else { return }
           await model.updateConversationTitle(selectedConversationID, title: title)
         },
+        updateConversationMetadata: { metadata in
+          guard let selectedConversationID = model.selectedConversationID else { return }
+          try await model.updateConversationMetadata(selectedConversationID, metadata: metadata)
+        },
         joinConversationEscalation: {
           guard let selectedConversationID = model.selectedConversationID else { return }
           await model.joinConversationEscalation(selectedConversationID)
@@ -288,10 +292,29 @@ struct WorkspaceRootView: View {
           }
         }
       )
+      let seenDebugState = ConversationSeenDebugState(
+        currentActorUserID: model.currentActorUserID,
+        isManuallyMarkedUnread: model.isConversationManuallyMarkedUnread(model.selectedConversationID),
+        effectiveHasUnreadActivity: model.selectedConversation.map { model.conversationHasUnreadActivity($0) } ?? false,
+        rawHasUnreadActivity: model.selectedConversation?.hasUnreadActivity ?? false,
+        shouldAutoMarkSeenOnOpen: model.shouldAutoMarkSeenOnOpen,
+        autoSeenShouldAttempt: autoSeenTrigger.shouldAttemptAutoSeen,
+        routeTitle: activeRoute.title,
+        selectedConversationID: model.selectedConversationID,
+        selectedConversationDetailID: model.selectedConversationDetail?.id,
+        loadStateDescription: describe(model.selectedConversationLoadState),
+        scenePhaseDescription: describe(scenePhase),
+        controlActiveStateDescription: describe(controlActiveState),
+        realtimeConnectionDescription: describe(model.realtimeConnectionState),
+        lastRealtimeEventAt: model.lastRealtimeEventDate.map {
+          ISO8601DateFormatter.internetDateTime.string(from: $0)
+        }
+      )
 
       ConversationDetailView(
         website: model.website,
         conversation: model.selectedConversation,
+        listSnapshotConversation: model.selectedConversationListSnapshot,
         detail: model.selectedConversationDetail,
         visitor: model.selectedVisitor,
         visitorPresence: model.visitorPresence(for: model.selectedConversation?.visitorId),
@@ -302,6 +325,8 @@ struct WorkspaceRootView: View {
         realtimeConnectionState: model.realtimeConnectionState,
         controls: conversationControls,
         actions: conversationActions,
+        showDeveloperLogs: model.showDeveloperLogs,
+        seenDebugState: seenDebugState,
         translatedMessagesByID: model.translatedMessagesByID,
         translatedClarification: model.translatedClarification,
         loadState: model.selectedConversationLoadState
@@ -363,6 +388,9 @@ struct WorkspaceRootView: View {
         onOpenConversation: { conversationID in
           workspaceStore.selectedRoute = .inbox(.all)
           model.selectedConversationID = conversationID
+        },
+        onResolveAnyway: { conversationID in
+          await model.resolveAutoResolveResult(conversationID)
         }
       )
     case .faq:
@@ -435,6 +463,58 @@ struct WorkspaceRootView: View {
       }
     } catch {
       model.knowledgeStore.errorMessage = error.localizedDescription
+    }
+  }
+
+  private func describe(_ loadState: ConversationSelectionLoadState) -> String {
+    switch loadState {
+    case .idle:
+      "idle"
+    case .loading:
+      "loading"
+    case .loaded:
+      "loaded"
+    case .failed(let message):
+      "failed: \(message)"
+    }
+  }
+
+  private func describe(_ state: DashboardRealtimeConnectionState) -> String {
+    switch state {
+    case .connected(let connectionID):
+      "connected (\(connectionID ?? "no connection id"))"
+    case .connecting:
+      "connecting"
+    case .disconnected:
+      "disconnected"
+    case .failed(let message):
+      "failed: \(message)"
+    }
+  }
+
+  private func describe(_ phase: ScenePhase) -> String {
+    switch phase {
+    case .active:
+      "active"
+    case .inactive:
+      "inactive"
+    case .background:
+      "background"
+    @unknown default:
+      "unknown"
+    }
+  }
+
+  private func describe(_ state: ControlActiveState) -> String {
+    switch state {
+    case .active:
+      "active"
+    case .inactive:
+      "inactive"
+    case .key:
+      "key"
+    @unknown default:
+      "unknown"
     }
   }
 

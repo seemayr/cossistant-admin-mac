@@ -13,6 +13,7 @@ enum ConversationWorkspaceLayout {
 struct ConversationWorkspaceView: View {
   let website: DashboardWebsite?
   let conversation: DashboardConversation
+  let listSnapshotConversation: DashboardConversation?
   let detail: DashboardConversationDetail?
   let visitor: DashboardVisitor?
   let visitorPresence: DashboardVisitorPresence?
@@ -23,6 +24,8 @@ struct ConversationWorkspaceView: View {
   let realtimeConnectionState: DashboardRealtimeConnectionState
   let controls: ConversationWorkspaceControls
   let actions: ConversationWorkspaceActions
+  let showDeveloperLogs: Bool
+  let seenDebugState: ConversationSeenDebugState
   let translatedMessagesByID: [String: DashboardMessageTranslation]
   let translatedClarification: DashboardMessageTranslation?
   let loadState: ConversationSelectionLoadState
@@ -70,11 +73,15 @@ struct ConversationWorkspaceView: View {
   private var inspectorColumn: some View {
     ConversationInspectorView(
       conversation: conversation,
+      listSnapshotConversation: listSnapshotConversation,
       detail: detail,
       visitor: visitor,
       visitorPresence: visitorPresence,
       seenData: seenData,
-      realtimeConnectionState: realtimeConnectionState
+      realtimeConnectionState: realtimeConnectionState,
+      showDeveloperLogs: showDeveloperLogs,
+      seenDebugState: seenDebugState,
+      onUpdateConversationMetadata: actions.updateConversationMetadata
     )
     .frame(
       minWidth: ConversationWorkspaceLayout.inspectorMinWidth,

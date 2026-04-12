@@ -8,6 +8,7 @@ struct AIAutoResolveWorkspaceView: View {
   let onCancel: () -> Void
   let onClearResults: () -> Void
   let onOpenConversation: (String) -> Void
+  let onResolveAnyway: (String) async -> Void
 
   var body: some View {
     ScrollView {
@@ -96,12 +97,15 @@ struct AIAutoResolveWorkspaceView: View {
       } else {
         VStack(alignment: .leading, spacing: 12) {
           ForEach(store.results) { result in
-            Button {
-              onOpenConversation(result.conversationID)
-            } label: {
-              AutoResolveResultRow(result: result)
-            }
-            .buttonStyle(.plain)
+            AutoResolveResultRow(
+              result: result,
+              onOpenConversation: {
+                onOpenConversation(result.conversationID)
+              },
+              onResolveAnyway: {
+                await onResolveAnyway(result.conversationID)
+              }
+            )
           }
         }
       }
@@ -111,6 +115,9 @@ struct AIAutoResolveWorkspaceView: View {
 
 private struct AutoResolveResultRow: View {
   let result: AutoResolveResult
+  let onOpenConversation: () -> Void
+  let onResolveAnyway: () async -> Void
+  @State private var isShowingRawResponse = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -138,6 +145,15 @@ private struct AutoResolveResultRow: View {
           .padding(.vertical, 4)
           .background(.secondary.opacity(0.12), in: .capsule)
 
+        if let aiMarkedResolved = result.aiMarkedResolved {
+          Text(aiMarkedResolved ? "AI: Resolved" : "AI: Not resolved")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(aiMarkedResolved ? .green : .orange)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background((aiMarkedResolved ? Color.green : .orange).opacity(0.12), in: .capsule)
+        }
+
         Spacer(minLength: 0)
       }
 
@@ -148,12 +164,57 @@ private struct AutoResolveResultRow: View {
           .multilineTextAlignment(.leading)
       }
 
+      if let decisionNote = result.decisionNote, !decisionNote.isEmpty {
+        Text(decisionNote)
+          .font(.caption)
+          .foregroundStyle(result.outcome == .manuallyResolved ? .green : .orange)
+          .multilineTextAlignment(.leading)
+      }
+
+      if let rawAIResponseText = result.rawAIResponseText, !rawAIResponseText.isEmpty {
+        DisclosureGroup(isExpanded: $isShowingRawResponse) {
+          Text(rawAIResponseText)
+            .font(.caption.monospaced())
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 6)
+        } label: {
+          Text("Raw AI response")
+            .font(.caption.weight(.medium))
+        }
+      }
+
       HStack(spacing: 8) {
         Label(result.visitorID, systemSymbol: .personTextRectangle)
           .font(.caption)
           .foregroundStyle(.tertiary)
 
         Spacer(minLength: 0)
+
+        if let rawAIResponseText = result.rawAIResponseText, !rawAIResponseText.isEmpty {
+          Button("Copy AI Response") {
+            StringClipboardWriter.copy(rawAIResponseText)
+          }
+          .buttonStyle(.borderless)
+          .font(.caption)
+        }
+
+        if result.outcome == .notResolved {
+          Button(result.isResolvingAnyway ? "Resolving..." : "Resolve anyway") {
+            Task {
+              await onResolveAnyway()
+            }
+          }
+          .buttonStyle(.borderless)
+          .font(.caption)
+          .disabled(result.isResolvingAnyway)
+        }
+
+        Button("Open Conversation") {
+          onOpenConversation()
+        }
+        .buttonStyle(.borderless)
+        .font(.caption)
 
         Text(result.createdAt.formatted(.dateTime.hour().minute()))
           .font(.caption2)
@@ -170,6 +231,8 @@ private struct AutoResolveResultRow: View {
     case .emptyResolved:
       return .secondary
     case .resolved:
+      return .green
+    case .manuallyResolved:
       return .green
     case .notResolved:
       return .orange

@@ -11,6 +11,8 @@ extension WorkspaceModel {
       return
     }
 
+    let listSnapshot = inboxStore.conversation(withID: conversationID)
+
     if !force,
        conversationStore.selectedConversationDetail?.id == conversationID,
        conversationStore.selectedConversationLoadState == .loaded {
@@ -19,7 +21,10 @@ extension WorkspaceModel {
 
     if showsLoadingState {
       clearSelectedConversationState()
+      conversationStore.selectedConversationListSnapshot = listSnapshot
       conversationStore.selectedConversationLoadState = .loading
+    } else if conversationStore.selectedConversationListSnapshot?.id != conversationID {
+      conversationStore.selectedConversationListSnapshot = listSnapshot
     }
 
     if DashboardReadDebug.isTargetConversation(conversationID) {
