@@ -24,24 +24,23 @@ struct WorkspaceRootView: View {
           openWindow(id: "launcher")
         }
       } else {
-        NavigationSplitView {
-          WorkspaceSidebarView(
-            model: model,
-            inboxStore: model.inboxStore,
-            selection: $workspaceStore.selectedRoute,
-            onRefresh: {
-              Task {
-                await refreshCurrentSection()
-              }
-            }
-          )
-            .navigationSplitViewColumnWidth(min: 190, ideal: 250, max: 280)
-        } content: {
-          contentColumn
-        } detail: {
-          detailColumn
+        if case .aiAutoResolve = activeRoute {
+          NavigationSplitView {
+            sidebarColumn
+          } detail: {
+            detailColumn
+          }
+          .navigationSplitViewStyle(.prominentDetail)
+        } else {
+          NavigationSplitView {
+            sidebarColumn
+          } content: {
+            contentColumn
+          } detail: {
+            detailColumn
+          }
+          .navigationSplitViewStyle(.prominentDetail)
         }
-        .navigationSplitViewStyle(.prominentDetail)
       }
     }
     .task {
@@ -139,6 +138,20 @@ struct WorkspaceRootView: View {
         }
       }
     }
+  }
+
+  private var sidebarColumn: some View {
+    WorkspaceSidebarView(
+      model: model,
+      inboxStore: model.inboxStore,
+      selection: $workspaceStore.selectedRoute,
+      onRefresh: {
+        Task {
+          await refreshCurrentSection()
+        }
+      }
+    )
+    .navigationSplitViewColumnWidth(min: 190, ideal: 250, max: 280)
   }
 
   @ViewBuilder
@@ -414,6 +427,9 @@ struct WorkspaceRootView: View {
         },
         onResolveAnyway: { conversationID in
           await model.resolveAutoResolveResult(conversationID)
+        },
+        onMarkAsSeen: { conversationID in
+          await model.markAutoResolveResultSeen(conversationID)
         },
         onSetShowTranslations: { isEnabled in
           await model.setShowMessageTranslations(isEnabled)

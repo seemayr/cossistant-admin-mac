@@ -139,7 +139,8 @@ final class AutoResolveCoordinator {
               outcome: .emptyResolved,
               category: .unknown,
               title: "Empty conversation",
-              body: "No message activity was found, so the conversation was resolved automatically."
+              body: "No message activity was found, so the conversation was resolved automatically.",
+              isSeen: !conversation.hasUnreadActivity
             )
           )
           continue
@@ -182,7 +183,8 @@ final class AutoResolveCoordinator {
               outcome: .emptyResolved,
               category: .unknown,
               title: "Empty conversation",
-              body: "No visible message content was found, so the conversation was resolved automatically."
+              body: "No visible message content was found, so the conversation was resolved automatically.",
+              isSeen: !conversation.hasUnreadActivity
             )
           )
           log("Resolved conversation \(conversation.id) without AI because no visible message content was found")
@@ -222,7 +224,8 @@ final class AutoResolveCoordinator {
                 category: verdict.category,
                 title: verdict.title,
                 body: verdict.body,
-                rawAIResponseText: verdict.rawResponseText
+                rawAIResponseText: verdict.rawResponseText,
+                isSeen: !conversation.hasUnreadActivity
               )
             )
           } else {
@@ -240,7 +243,8 @@ final class AutoResolveCoordinator {
                   for: conversation,
                   aiMarkedResolved: verdict.isResolved
                 ),
-                rawAIResponseText: verdict.rawResponseText
+                rawAIResponseText: verdict.rawResponseText,
+                isSeen: !conversation.hasUnreadActivity
               )
             )
           }
@@ -287,7 +291,8 @@ final class AutoResolveCoordinator {
         outcome: .notResolved,
         category: .unknown,
         title: title,
-        body: displayMessage(for: error)
+        body: displayMessage(for: error),
+        isSeen: !conversation.hasUnreadActivity
       )
     )
   }

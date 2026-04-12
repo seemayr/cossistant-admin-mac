@@ -123,6 +123,8 @@ struct AutoResolveResult: Identifiable, Hashable, Sendable {
   var decisionNote: String?
   let rawAIResponseText: String?
   let createdAt: Date
+  var isSeen: Bool
+  var isMarkingSeen: Bool
   var isResolvingAnyway: Bool
 
   init(
@@ -137,6 +139,8 @@ struct AutoResolveResult: Identifiable, Hashable, Sendable {
     decisionNote: String? = nil,
     rawAIResponseText: String? = nil,
     createdAt: Date = .now,
+    isSeen: Bool = false,
+    isMarkingSeen: Bool = false,
     isResolvingAnyway: Bool = false
   ) {
     self.id = id
@@ -150,6 +154,8 @@ struct AutoResolveResult: Identifiable, Hashable, Sendable {
     self.decisionNote = decisionNote
     self.rawAIResponseText = rawAIResponseText
     self.createdAt = createdAt
+    self.isSeen = isSeen
+    self.isMarkingSeen = isMarkingSeen
     self.isResolvingAnyway = isResolvingAnyway
   }
 }

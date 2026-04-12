@@ -22,11 +22,12 @@ struct AIAutoResolveWorkspaceView: View {
   let onInspectConversation: (String) async -> Void
   let onOpenConversation: (String) -> Void
   let onResolveAnyway: (String) async -> Void
+  let onMarkAsSeen: (String) async -> Void
   let onSetShowTranslations: (Bool) async -> Void
   let onLoadMoreTimeline: () -> Void
 
   var body: some View {
-    HSplitView {
+    HStack(spacing: 0) {
       ScrollView {
         VStack(alignment: .leading, spacing: 20) {
           Text("Auto-Resolve")
@@ -53,6 +54,8 @@ struct AIAutoResolveWorkspaceView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
       }
+
+      Divider()
 
       autoResolveInspectorColumn
     }
@@ -97,16 +100,12 @@ struct AIAutoResolveWorkspaceView: View {
         .disabled(!store.canClearResults)
 
         Spacer()
-
-        Text("\(store.results.count) reviewed")
-          .font(.caption)
-          .foregroundStyle(.secondary)
       }
     }
   }
 
   private var autoResolveResultsCard: some View {
-    PrototypeInfoCard(title: "Review Results") {
+    PrototypeInfoCard(title: "Review Results (\(store.results.count))") {
       if store.results.isEmpty {
         ContentUnavailableView(
           "No review results yet",
@@ -127,6 +126,9 @@ struct AIAutoResolveWorkspaceView: View {
               },
               onResolveAnyway: {
                 await onResolveAnyway(result.conversationID)
+              },
+              onMarkAsSeen: {
+                await onMarkAsSeen(result.conversationID)
               }
             )
           }
@@ -167,6 +169,7 @@ private struct AutoResolveResultRow: View {
   let onInspectConversation: () async -> Void
   let onOpenConversation: () -> Void
   let onResolveAnyway: () async -> Void
+  let onMarkAsSeen: () async -> Void
   @State private var isShowingRawResponse = false
 
   var body: some View {
@@ -267,6 +270,17 @@ private struct AutoResolveResultRow: View {
           .buttonStyle(.borderless)
           .font(.caption)
           .disabled(result.isResolvingAnyway)
+        }
+
+        if !result.isSeen {
+          Button(result.isMarkingSeen ? "Marking seen..." : "Mark as seen") {
+            Task {
+              await onMarkAsSeen()
+            }
+          }
+          .buttonStyle(.borderless)
+          .font(.caption)
+          .disabled(result.isMarkingSeen)
         }
 
         Button("Open Conversation") {

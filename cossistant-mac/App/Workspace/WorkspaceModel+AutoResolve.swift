@@ -54,4 +54,55 @@ extension WorkspaceModel {
       autoResolveResults[updatedIndex].decisionNote = "Manual resolve failed: \(error.localizedDescription)"
     }
   }
+
+  func markAutoResolveResultSeen(_ conversationID: DashboardConversation.ID) async {
+    guard let index = autoResolveResults.firstIndex(where: { $0.conversationID == conversationID }) else {
+      return
+    }
+
+    autoResolveResults[index].isMarkingSeen = true
+
+    do {
+      manuallyUnreadConversationIDs.remove(conversationID)
+
+      let optimisticSeenAt = ISO8601DateFormatter.internetDateTime.string(from: .now)
+      setConversationLastSeenAt(conversationID: conversationID, lastSeenAt: optimisticSeenAt)
+      setConversationTeamLastSeenAt(conversationID: conversationID, lastSeenAt: optimisticSeenAt)
+
+      let client = CossistantAPIClient(configuration: configuration)
+      let updatedConversation = try await client.markConversationRead(conversationID: conversationID)
+      applyMutatedConversation(
+        updatedConversation,
+        preserveExistingLastMessageAt: true,
+        preserveExistingLastSeenAt: true
+      )
+
+      if selectedConversationID == conversationID {
+        let seenData = try await client.fetchConversationSeenData(conversationID: conversationID)
+        selectedSeenData = seenData
+        syncConversationSeenState(
+          conversationID: conversationID,
+          with: seenData,
+          fallbackCurrentActorSeenAt: optimisticSeenAt
+        )
+      }
+
+      guard let updatedIndex = autoResolveResults.firstIndex(where: { $0.conversationID == conversationID }) else {
+        return
+      }
+
+      autoResolveResults[updatedIndex].isMarkingSeen = false
+      autoResolveResults[updatedIndex].isSeen = true
+      autoResolveResults[updatedIndex].decisionNote = "Marked as seen from the Auto-Resolve results."
+    } catch {
+      errorMessage = error.localizedDescription
+
+      guard let updatedIndex = autoResolveResults.firstIndex(where: { $0.conversationID == conversationID }) else {
+        return
+      }
+
+      autoResolveResults[updatedIndex].isMarkingSeen = false
+      autoResolveResults[updatedIndex].decisionNote = "Mark as seen failed: \(error.localizedDescription)"
+    }
+  }
 }
