@@ -1,0 +1,58 @@
+import Foundation
+
+@MainActor
+extension WorkspaceModel {
+  func makeAnalyticsCoordinator() -> AnalyticsCoordinator {
+    AnalyticsCoordinator(
+      store: analyticsStore,
+      configuration: configuration,
+      canUseOpenAI: canUseOpenAIReplyDrafts,
+      openAIAPIKey: globalSettings.trimmedOpenAIAPIKey,
+      workspaceName: website?.name,
+      inboxPageSize: Self.inboxPageSize,
+      fetchAIMessageItems: fetchAIMessageItems,
+      isIgnorableCancellation: isIgnorableCancellation
+    )
+  }
+
+  func makeAutoResolveCoordinator() -> AutoResolveCoordinator {
+    AutoResolveCoordinator(
+      store: autoResolveStore,
+      configuration: configuration,
+      canUseOpenAI: canUseOpenAIReplyDrafts,
+      openAIAPIKey: globalSettings.trimmedOpenAIAPIKey,
+      workspaceName: website?.name,
+      candidateConversations: autoResolveCandidateConversations,
+      eligibleScope: autoResolveEligibleScope,
+      fetchAIMessageItems: fetchAIMessageItems,
+      applyMutatedConversation: { [weak self] mutation in
+        self?.applyMutatedConversation(mutation)
+      },
+      refreshSelectedConversationIfNeeded: { [weak self] conversationID in
+        guard let self, self.selectedConversationID == conversationID else { return }
+        await self.loadSelectedConversation(force: true, showsLoadingState: false)
+      },
+      setGlobalErrorMessage: setGlobalErrorMessage,
+      isIgnorableCancellation: isIgnorableCancellation
+    )
+  }
+
+  func makeFAQCoordinator() -> FAQCoordinator {
+    let exportCoordinator = makeConversationExportCoordinator()
+
+    return FAQCoordinator(
+      store: faqStore,
+      canUseOpenAI: canUseOpenAIReplyDrafts,
+      openAIAPIKey: globalSettings.trimmedOpenAIAPIKey,
+      workspaceName: website?.name,
+      selectedConversation: { [weak self] in
+        self?.selectedConversation
+      },
+      fetchSelectedConversationTranscript: {
+        try await exportCoordinator.fetchSelectedConversationTranscript()
+      },
+      encodeConversationTranscript: exportCoordinator.encodeConversationTranscript,
+      isIgnorableCancellation: isIgnorableCancellation
+    )
+  }
+}
