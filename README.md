@@ -1,4 +1,4 @@
-# cossistant-mac
+# cossistant-admin-mac
 
 Native macOS client for working with Cossistant inbox conversations.
 
@@ -10,8 +10,8 @@ Native macOS client for working with Cossistant inbox conversations.
 
 ### Option 1: Xcode
 
-1. Open `cossistant-mac.xcodeproj` in Xcode.
-2. Build and run the `cossistant-mac` scheme.
+1. Open `cossistant-admin-mac.xcodeproj` in Xcode.
+2. Build and run the `cossistant-admin-mac` scheme.
 
 ### Option 2: Script
 

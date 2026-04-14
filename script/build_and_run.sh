@@ -2,13 +2,13 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="cossistant-mac"
-SCHEME="cossistant-mac"
+APP_NAME="cossistant-admin-mac"
+SCHEME="cossistant-admin-mac"
 CONFIGURATION="Debug"
-BUNDLE_ID="earth.mizo.cossistant-mac"
+BUNDLE_ID="earth.mizo.cossistant-admin-mac"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT_PATH="$ROOT_DIR/cossistant-mac.xcodeproj"
+PROJECT_PATH="$ROOT_DIR/cossistant-admin-mac.xcodeproj"
 DERIVED_DATA_PATH="$ROOT_DIR/build/DerivedData"
 APP_BUNDLE="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_NAME.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
