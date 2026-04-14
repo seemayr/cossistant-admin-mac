@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0A08C8FE3C4A4B6400010001 /* CossistantAdmin in Frameworks */ = {isa = PBXBuildFile; productRef = 0A08C8FD3C4A4B6400010001 /* CossistantAdmin */; };
 		B46A09392F88043B003CF54B /* SFSafeSymbols in Frameworks */ = {isa = PBXBuildFile; productRef = B46A09382F88043B003CF54B /* SFSafeSymbols */; };
+		B4D747F02F8E41960002E36A /* CossistantAdmin in Frameworks */ = {isa = PBXBuildFile; productRef = B4D747EF2F8E41960002E36A /* CossistantAdmin */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,8 +28,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0A08C8FE3C4A4B6400010001 /* CossistantAdmin in Frameworks */,
 				B46A09392F88043B003CF54B /* SFSafeSymbols in Frameworks */,
+				B4D747F02F8E41960002E36A /* CossistantAdmin in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,8 +72,8 @@
 			);
 			name = "cossistant-admin-mac";
 			packageProductDependencies = (
-				0A08C8FD3C4A4B6400010001 /* CossistantAdmin */,
 				B46A09382F88043B003CF54B /* SFSafeSymbols */,
+				B4D747EF2F8E41960002E36A /* CossistantAdmin */,
 			);
 			productName = "cossistant-admin-mac";
 			productReference = B46A087F2F877945003CF54B /* cossistant-admin-mac.app */;
@@ -104,8 +104,8 @@
 			mainGroup = B46A08762F877945003CF54B;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				0A08C8FC3C4A4B6400010001 /* XCLocalSwiftPackageReference "../cossistant-admin-swift" */,
 				B46A09372F88043B003CF54B /* XCRemoteSwiftPackageReference "SFSafeSymbols" */,
+				B4D747EE2F8E41960002E36A /* XCRemoteSwiftPackageReference "cossistant-admin-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B46A08802F877945003CF54B /* Products */;
@@ -136,13 +136,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin XCLocalSwiftPackageReference section */
-		0A08C8FC3C4A4B6400010001 /* XCLocalSwiftPackageReference "../cossistant-admin-swift" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "../cossistant-admin-swift";
-		};
-/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCBuildConfiguration section */
 		B46A08882F877948003CF54B /* Debug */ = {
@@ -333,14 +326,6 @@
 		};
 /* End XCBuildConfiguration section */
 
-/* Begin XCSwiftPackageProductDependency section */
-		0A08C8FD3C4A4B6400010001 /* CossistantAdmin */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0A08C8FC3C4A4B6400010001 /* XCLocalSwiftPackageReference "../cossistant-admin-swift" */;
-			productName = CossistantAdmin;
-		};
-/* End XCSwiftPackageProductDependency section */
-
 /* Begin XCConfigurationList section */
 		B46A087A2F877945003CF54B /* Build configuration list for PBXProject "cossistant-admin-mac" */ = {
 			isa = XCConfigurationList;
@@ -371,6 +356,14 @@
 				minimumVersion = 7.0.0;
 			};
 		};
+		B4D747EE2F8E41960002E36A /* XCRemoteSwiftPackageReference "cossistant-admin-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/seemayr/cossistant-admin-swift";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -378,6 +371,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B46A09372F88043B003CF54B /* XCRemoteSwiftPackageReference "SFSafeSymbols" */;
 			productName = SFSafeSymbols;
+		};
+		B4D747EF2F8E41960002E36A /* CossistantAdmin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B4D747EE2F8E41960002E36A /* XCRemoteSwiftPackageReference "cossistant-admin-swift" */;
+			productName = CossistantAdmin;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

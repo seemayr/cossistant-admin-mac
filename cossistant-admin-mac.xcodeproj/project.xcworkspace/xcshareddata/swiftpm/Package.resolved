@@ -1,6 +1,15 @@
 {
-  "originHash" : "7975b4984a05a361f87c8352bf147d53e327c5392fa2b5e01e7f4ff03b5dc4c8",
+  "originHash" : "db2af1b8eef5882ff6441c9d70b5fd44c6fa4585ee75023c85bf3ccd903d0326",
   "pins" : [
+    {
+      "identity" : "cossistant-admin-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/seemayr/cossistant-admin-swift",
+      "state" : {
+        "branch" : "main",
+        "revision" : "b2f0bb7510ccec0630caf2a5e7b5a36e66af1932"
+      }
+    },
     {
       "identity" : "sfsafesymbols",
       "kind" : "remoteSourceControl",
