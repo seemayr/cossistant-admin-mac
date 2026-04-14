@@ -14,6 +14,15 @@ struct WorkspaceRootView: View {
     workspaceStore.activeRoute
   }
 
+  private var usesDetailOnlySplitLayout: Bool {
+    switch activeRoute {
+    case .statistics, .aiSummarize, .aiAutoResolve, .faq:
+      true
+    case .inbox, .contacts, .knowledge:
+      false
+    }
+  }
+
   var body: some View {
     Group {
       if model.website == nil {
@@ -25,7 +34,7 @@ struct WorkspaceRootView: View {
           openWindow(id: "launcher")
         }
       } else {
-        if case .aiAutoResolve = activeRoute {
+        if usesDetailOnlySplitLayout {
           NavigationSplitView {
             sidebarColumn
           } detail: {
@@ -50,6 +59,8 @@ struct WorkspaceRootView: View {
     .task(id: activeRoute) {
       switch activeRoute {
       case .inbox:
+        break
+      case .statistics:
         break
       case .contacts:
         guard model.contactsStore.items.isEmpty, !model.contactsStore.isLoadingList else {
@@ -190,15 +201,8 @@ struct WorkspaceRootView: View {
         }
       )
       .navigationSplitViewColumnWidth(min: 260, ideal: 340, max: 420)
-    case .aiSummarize:
-      AISummarizeNavigationPlaceholderView(store: model.analyticsStore)
-        .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
-    case .aiAutoResolve:
-      AIAutoResolveNavigationPlaceholderView(store: model.autoResolveStore)
-        .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
-    case .faq:
-      FAQNavigationPlaceholderView(store: model.faqStore)
-        .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
+    case .statistics, .aiSummarize, .aiAutoResolve, .faq:
+      EmptyView()
     }
   }
 
@@ -346,6 +350,8 @@ struct WorkspaceRootView: View {
         loadState: model.selectedConversationLoadState
       )
       .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
+    case .statistics:
+      ConversationStatisticsWorkspaceView(store: model.inboxStore)
     case .contacts:
       ContactDetailPrototypeView(
         store: model.contactsStore,
@@ -468,6 +474,8 @@ struct WorkspaceRootView: View {
   private func refreshCurrentSection() async {
     switch activeRoute {
     case .inbox:
+      await model.refresh()
+    case .statistics:
       await model.refresh()
     case .contacts:
       await model.contactsStore.refresh()

@@ -94,6 +94,7 @@ extension InboxScope {
 
 enum WorkspaceRoute: Hashable {
   case inbox(InboxScope)
+  case statistics
   case contacts
   case knowledge
   case aiSummarize
@@ -104,6 +105,8 @@ enum WorkspaceRoute: Hashable {
     switch self {
     case .inbox(let scope):
       scope.title
+    case .statistics:
+      "Statistics"
     case .contacts:
       "Contacts"
     case .knowledge:
@@ -121,6 +124,8 @@ enum WorkspaceRoute: Hashable {
     switch self {
     case .inbox(let scope):
       scope.systemSymbol
+    case .statistics:
+      .chartBar
     case .contacts:
       .person2
     case .knowledge:

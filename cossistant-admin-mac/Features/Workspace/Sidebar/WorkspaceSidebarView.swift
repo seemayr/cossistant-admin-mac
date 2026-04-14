@@ -48,6 +48,8 @@ struct WorkspaceSidebarView: View {
         }
 
         Section("Workspace") {
+          Label("Statistics", systemSymbol: .chartBar)
+            .tag(WorkspaceRoute.statistics)
           Label("Contacts", systemSymbol: .person2)
             .tag(WorkspaceRoute.contacts)
           Label("Knowledge", systemSymbol: .booksVertical)
