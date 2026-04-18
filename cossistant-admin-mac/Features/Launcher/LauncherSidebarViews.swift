@@ -8,7 +8,7 @@ struct LauncherSidebarHeader: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Cossistant")
-        .font(.title2.weight(.semibold))
+        .font(.title3.weight(.semibold))
 
       Text(profileCount == 1 ? "1 profile" : "\(profileCount) profiles")
         .font(.caption)
@@ -45,7 +45,7 @@ struct LauncherSidebarRow: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
       Text(profile.name)
-        .font(.headline.weight(.medium))
+        .font(.body.weight(.medium))
         .lineLimit(1)
 
       Text(profile.hostLabel)
@@ -53,8 +53,7 @@ struct LauncherSidebarRow: View {
         .foregroundStyle(.secondary)
         .lineLimit(1)
     }
-    .padding(.vertical, 8)
-    .padding(.horizontal, 6)
+    .padding(.vertical, 4)
     .frame(maxWidth: .infinity, alignment: .leading)
     .contentShape(.rect(cornerRadius: 10))
     .onTapGesture(count: 2) {

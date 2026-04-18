@@ -3,6 +3,32 @@ import CossistantAdmin
 
 @MainActor
 extension WorkspaceModel {
+  func selectConversation(_ conversationID: DashboardConversation.ID?) {
+    if conversationID == selectedConversationID,
+       conversationStore.selectedConversationDetail?.id == conversationID,
+       conversationStore.selectedConversationLoadState == .loaded {
+      return
+    }
+
+    selectedConversationLoadTask?.cancel()
+    selectedConversationLoadTask = nil
+    selectedConversationID = conversationID
+
+    guard let conversationID else {
+      clearSelectedConversationState()
+      return
+    }
+
+    let listSnapshot = inboxStore.conversation(withID: conversationID)
+    conversationStore.prepareSelection(listSnapshot)
+    guard website != nil else { return }
+
+    selectedConversationLoadTask = Task { [weak self] in
+      guard let self else { return }
+      await self.loadSelectedConversation(showsLoadingState: false)
+    }
+  }
+
   func loadSelectedConversation(
     force: Bool = false,
     showsLoadingState: Bool = true
@@ -36,14 +62,26 @@ extension WorkspaceModel {
     }
 
     do {
-      async let detail = backendClient.conversations.fetchConversation(id: conversationID)
-      async let timeline = backendClient.conversations.fetchTimeline(conversationID: conversationID)
-      async let seenData = backendClient.conversations.fetchConversationSeenData(
-        conversationID: conversationID
-      )
+      let configuration = self.configuration
+      let visitorID = selectedConversation?.visitorId
+      async let detail: DashboardConversationDetail = {
+        let client = CossistantAdminClient(configuration: configuration)
+        return try await client.conversations.fetchConversation(id: conversationID)
+      }()
+      async let timeline: DashboardTimelinePage = {
+        let client = CossistantAdminClient(configuration: configuration)
+        return try await client.conversations.fetchTimeline(conversationID: conversationID)
+      }()
+      async let seenData: [DashboardConversationSeen] = {
+        let client = CossistantAdminClient(configuration: configuration)
+        return try await client.conversations.fetchConversationSeenData(
+          conversationID: conversationID
+        )
+      }()
       let resolvedVisitor: DashboardVisitor?
-      if let visitorID = selectedConversation?.visitorId {
-        resolvedVisitor = try await backendClient.visitors.fetchVisitor(id: visitorID)
+      if let visitorID {
+        let client = CossistantAdminClient(configuration: configuration)
+        resolvedVisitor = try await client.visitors.fetchVisitor(id: visitorID)
       } else {
         resolvedVisitor = nil
       }
@@ -84,8 +122,8 @@ extension WorkspaceModel {
       guard !isIgnorableCancellation(error) else { return }
       if showsLoadingState {
         clearSelectedConversationState()
-        conversationStore.selectedConversationLoadState = .failed(error.localizedDescription)
       }
+      conversationStore.markSelectionFailed(error.localizedDescription)
       setGlobalErrorMessage(error)
     }
   }
@@ -130,17 +168,19 @@ extension WorkspaceModel {
     force: Bool = false
   ) async {
     guard conversationStore.showTranslations else { return }
-    guard canUseMessageTranslations else {
-      conversationStore.translationErrorMessage = "Add a Google Cloud Translate API key in settings to use translations."
-      return
-    }
 
     let messages = conversationStore.selectedTimelineItems
       .filter { $0.type == .message }
       .filter { $0.deletedAt == nil }
       .filter { ($0.renderedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) == false }
 
-    let untranslated = messages.filter { force || conversationStore.translatedMessagesByID[$0.id] == nil }
+    seedStoredTranslations(for: messages, force: force)
+    conversationStore.translationErrorMessage = nil
+
+    let untranslated = messages.filter { item in
+      storedTeamTranslation(for: item) == nil
+        && (force || conversationStore.translatedMessagesByID[item.id] == nil)
+    }
     let clarificationQuestion = selectedConversation?.activeClarification?.question?
       .trimmingCharacters(in: .whitespacesAndNewlines)
     if clarificationQuestion?.isEmpty != false {
@@ -150,6 +190,10 @@ extension WorkspaceModel {
       && (force || conversationStore.translatedClarification == nil)
 
     guard !untranslated.isEmpty || shouldTranslateClarification else { return }
+    guard globalSettings.hasGoogleCloudTranslateAPIKey else {
+      conversationStore.translationErrorMessage = "Add a Google Cloud Translate API key in settings to translate messages that do not already include a stored translation."
+      return
+    }
 
     conversationStore.isTranslatingMessages = true
     conversationStore.translationErrorMessage = nil
@@ -179,7 +223,7 @@ extension WorkspaceModel {
     }
   }
 
-  fileprivate static var preferredTranslationLanguageCode: String {
+  static var preferredTranslationLanguageCode: String {
     if let preferred = Locale.preferredLanguages.first {
       let locale = Locale(identifier: preferred)
       if #available(macOS 13.0, *) {
@@ -194,5 +238,57 @@ extension WorkspaceModel {
     }
 
     return "en"
+  }
+
+  private func seedStoredTranslations(
+    for messages: [DashboardTimelineItem],
+    force: Bool
+  ) {
+    for item in messages {
+      guard let translation = storedTeamTranslation(for: item) else { continue }
+      if force || conversationStore.translatedMessagesByID[item.id] == nil {
+        conversationStore.translatedMessagesByID[item.id] = translation
+      }
+    }
+  }
+
+  func hasStoredTeamTranslation(for item: DashboardTimelineItem) -> Bool {
+    storedTeamTranslation(for: item) != nil
+  }
+
+  private func storedTeamTranslation(
+    for item: DashboardTimelineItem
+  ) -> DashboardMessageTranslation? {
+    let teamTranslations = item.translationParts
+      .filter { $0.audience == "team" }
+      .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    guard !teamTranslations.isEmpty else { return nil }
+
+    let preferredLanguage = Self.preferredTranslationLanguageCode
+    let exactMatch = teamTranslations.last {
+      languageTagsMatch($0.targetLanguage, preferredLanguage)
+    }
+
+    let resolved = exactMatch ?? teamTranslations.last!
+    return DashboardMessageTranslation(
+      text: resolved.text,
+      detectedSourceLanguage: resolved.sourceLanguage
+    )
+  }
+
+  private func languageTagsMatch(_ lhs: String?, _ rhs: String?) -> Bool {
+    normalizedLanguageTag(lhs) == normalizedLanguageTag(rhs)
+  }
+
+  private func normalizedLanguageTag(_ value: String?) -> String? {
+    guard let value else { return nil }
+    return value
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+      .replacingOccurrences(of: "_", with: "-")
+      .split(separator: "-")
+      .first
+      .map(String.init)
   }
 }

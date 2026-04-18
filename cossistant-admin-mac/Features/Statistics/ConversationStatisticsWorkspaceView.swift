@@ -10,13 +10,9 @@ struct ConversationStatisticsWorkspaceView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
+      VStack(alignment: .leading, spacing: 18) {
         Text("Statistics")
-          .font(.largeTitle.weight(.semibold))
-
-        Text("Trend overview for the conversations currently fetched in this workspace. Counts exclude empty conversations. Unresolved includes every loaded conversation that is not marked resolved.")
-          .font(.title3)
-          .foregroundStyle(.secondary)
+          .font(.title.weight(.semibold))
 
         snapshotCard
 
@@ -37,14 +33,10 @@ struct ConversationStatisticsWorkspaceView: View {
   }
 
   private var snapshotCard: some View {
-    PrototypeInfoCard(title: "Current Snapshot") {
+    PrototypeInfoCard(title: "Loaded Snapshot") {
       PrototypeFact(label: "Fetched Conversations", value: overview.fetchedConversationCount.formatted(.number))
       PrototypeFact(label: "Non-Empty Conversations", value: overview.nonEmptyConversationCount.formatted(.number))
       PrototypeFact(label: "Loaded Pages", value: store.loadedPageCount.formatted(.number))
-
-      Text("This view only reflects the conversations already loaded into the app. Use Refresh or Load More in Inbox to broaden the sample.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
     }
   }
 }

@@ -6,7 +6,7 @@ struct ContactListRow: View {
   let contact: DashboardContactListItem
 
   var body: some View {
-    HStack(alignment: .top, spacing: 12) {
+    HStack(alignment: .top, spacing: 10) {
       AvatarPreviewButton(
         name: contact.displayName,
         imageURL: contact.image,
@@ -27,33 +27,11 @@ struct ContactListRow: View {
 
       Spacer(minLength: 0)
 
-      VStack(alignment: .trailing, spacing: 3) {
-        contactRowTimestamp(
-          title: "Seen",
-          value: contact.lastSeenRelativeText,
-          emphasized: true
-        )
-
-        contactRowTimestamp(
-          title: "Created",
-          value: contact.createdRelativeText,
-          emphasized: false
-        )
-      }
+      Text(contact.lastSeenRelativeText)
+        .font(.caption)
+        .foregroundStyle(.tertiary)
     }
     .padding(.vertical, 4)
-  }
-
-  private func contactRowTimestamp(title: String, value: String, emphasized: Bool) -> some View {
-    HStack(spacing: 4) {
-      Text(title)
-        .font(.caption2.weight(.medium))
-        .foregroundStyle(.tertiary)
-
-      Text(value)
-        .font(emphasized ? .caption.weight(.medium) : .caption2)
-        .foregroundStyle(emphasized ? .secondary : .tertiary)
-    }
   }
 }
 
@@ -79,12 +57,12 @@ struct ContactsSectionHeader: View {
   @Bindable var store: ContactsStore
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       Text("Contacts")
-        .font(.title2.weight(.semibold))
+        .font(.headline.weight(.semibold))
 
       Text(contactsSubtitle(store: store))
-        .font(.subheadline)
+        .font(.caption)
         .foregroundStyle(.secondary)
 
       HStack(spacing: 10) {
@@ -128,8 +106,8 @@ struct ContactsSectionHeader: View {
       .padding(.top, 4)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 18)
-    .padding(.vertical, 16)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 12)
     .background(.bar)
   }
 }
@@ -140,22 +118,12 @@ struct ContactsHeaderControlLabel: View {
   let systemImage: SFSymbol
 
   var body: some View {
-    Label {
-      VStack(alignment: .leading, spacing: 2) {
-        Text(title)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-
-        Text(value)
-          .font(.subheadline.weight(.medium))
-          .lineLimit(1)
-      }
-    } icon: {
-      Image(systemSymbol: systemImage)
-        .foregroundStyle(.secondary)
-    }
+    Label(value, systemSymbol: systemImage)
+      .font(.subheadline.weight(.medium))
+      .lineLimit(1)
     .padding(.horizontal, 10)
-    .padding(.vertical, 8)
-    .background(.quinary, in: .rect(cornerRadius: 12))
+    .padding(.vertical, 6)
+    .background(.quinary.opacity(0.8), in: .rect(cornerRadius: 12))
+    .help(title)
   }
 }

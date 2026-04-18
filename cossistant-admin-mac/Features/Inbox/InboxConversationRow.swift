@@ -210,12 +210,22 @@ struct InboxConversationRow: View {
         }
       }
 
-      Button {
-        Task {
-          await model.archiveConversation(conversation.id)
+      if conversation.isArchived {
+        Button {
+          Task {
+            await model.unarchiveConversation(conversation.id)
+          }
+        } label: {
+          Label("Unarchive", systemSymbol: .trayAndArrowUp)
         }
-      } label: {
-        Label("Archive", systemSymbol: .archivebox)
+      } else {
+        Button {
+          Task {
+            await model.archiveConversation(conversation.id)
+          }
+        } label: {
+          Label("Archive", systemSymbol: .archivebox)
+        }
       }
 
       Divider()
@@ -304,13 +314,17 @@ struct InboxConversationRow: View {
   }
 
   private var statusOutlineTint: Color? {
+    if conversation.isArchived {
+      return .secondary
+    }
+
     switch conversation.status {
     case .open:
-      nil
+      return nil
     case .resolved:
-      .green
+      return .green
     case .spam:
-      .red
+      return .red
     }
   }
 

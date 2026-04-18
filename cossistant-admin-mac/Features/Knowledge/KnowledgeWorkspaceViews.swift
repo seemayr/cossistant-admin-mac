@@ -4,6 +4,7 @@ import CossistantAdmin
 
 struct KnowledgeListView: View {
   @Bindable var store: KnowledgeStore
+  let availableAIAgents: [DashboardWebsite.AIAgent]
   @Binding var selection: String?
   let onCreate: (DashboardKnowledgeType) -> Void
   let onEdit: (DashboardKnowledge) -> Void
@@ -13,10 +14,17 @@ struct KnowledgeListView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      KnowledgeSectionHeader(store: store, onCreate: onCreate)
+      KnowledgeSectionHeader(
+        store: store,
+        availableAIAgents: availableAIAgents,
+        onCreate: onCreate
+      )
 
       List(store.items, selection: $selection) { item in
-        KnowledgeRowView(item: item)
+        KnowledgeRowView(
+          item: item,
+          aiAgentLabel: aiAgentLabel(for: item.aiAgentId)
+        )
           .padding(.vertical, 4)
           .tag(item.id)
           .contextMenu {
@@ -30,7 +38,9 @@ struct KnowledgeListView: View {
           }
       }
       .overlay {
-        if store.isLoadingList {
+        if !store.hasLoadedListOnce && store.items.isEmpty {
+          ProgressView("Loading knowledge…")
+        } else if store.isLoadingList && !store.items.isEmpty {
           ProgressView("Loading knowledge…")
         } else if store.items.isEmpty {
           ContentUnavailableView(
@@ -39,10 +49,6 @@ struct KnowledgeListView: View {
             description: Text("Knowledge sources and FAQs will appear here once loaded.")
           )
         }
-      }
-      .task(id: knowledgeQueryKey) {
-        store.page = 1
-        await store.refresh(page: 1)
       }
       .confirmationDialog(
         "Delete knowledge entry?",
@@ -71,24 +77,30 @@ struct KnowledgeListView: View {
     }
   }
 
-  private var knowledgeQueryKey: String {
-    [
-      store.filterType?.rawValue ?? "all",
-      store.filterIncluded.rawValue,
-      store.filterAIAgentID ?? "",
-      store.filterLinkSourceID ?? "",
-      String(store.pageSize),
-    ].joined(separator: "|")
+  private func aiAgentLabel(for aiAgentID: String?) -> String {
+    if let aiAgentID,
+       let agent = availableAIAgents.first(where: { $0.id == aiAgentID }) {
+      return "AI Agent • \(agent.displayName)"
+    }
+
+    if let aiAgentID {
+      return "AI Agent • \(aiAgentID)"
+    }
+
+    return "Shared Knowledge"
   }
 }
 
 struct KnowledgeDetailView: View {
   let item: DashboardKnowledge?
   @Binding var draft: DashboardKnowledgeEditorDraft?
+  let availableAIAgents: [DashboardWebsite.AIAgent]
+  let isLoading: Bool
   let errorMessage: String?
   let onSave: (DashboardKnowledgeEditorDraft) async -> Void
   let onCancelEditing: () -> Void
   let onEdit: (DashboardKnowledge) -> Void
+  let onOpenAIAgent: (String) -> Void
   let onDelete: (DashboardKnowledge) async -> Void
 
   @State private var pendingDeleteItem: DashboardKnowledge?
@@ -101,6 +113,7 @@ struct KnowledgeDetailView: View {
             get: { draft },
             set: { self.draft = $0 }
           ),
+          availableAIAgents: availableAIAgents,
           errorMessage: errorMessage,
           onSave: {
             Task {
@@ -109,6 +122,9 @@ struct KnowledgeDetailView: View {
           },
           onCancel: onCancelEditing
         )
+      } else if isLoading {
+        ProgressView("Loading knowledge…")
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else if let item {
         ScrollView {
           VStack(alignment: .leading, spacing: 20) {
@@ -144,13 +160,18 @@ struct KnowledgeDetailView: View {
               PrototypeFact(label: "Type", value: item.type.label)
               PrototypeFact(label: "Origin", value: item.origin)
               PrototypeFact(label: "Included", value: item.isIncluded ? "Yes" : "No")
-              PrototypeFact(label: "AI Agent ID", value: item.aiAgentId ?? "Shared")
+              PrototypeFact(label: "AI Agent", value: aiAgentLabel(for: item.aiAgentId))
               PrototypeFact(label: "Link Source ID", value: item.linkSourceId ?? "None")
               if let sourceURL = item.sourceUrl?.absoluteString {
                 PrototypeFact(label: "Source URL", value: sourceURL)
               }
               if let sourceTitle = item.sourceTitle {
                 PrototypeFact(label: "Source Title", value: sourceTitle)
+              }
+              if let aiAgentID = item.aiAgentId {
+                Button("Open Agent") {
+                  onOpenAIAgent(aiAgentID)
+                }
               }
             }
 
@@ -204,5 +225,18 @@ struct KnowledgeDetailView: View {
         )
       }
     }
+  }
+
+  private func aiAgentLabel(for aiAgentID: String?) -> String {
+    if let aiAgentID,
+       let agent = availableAIAgents.first(where: { $0.id == aiAgentID }) {
+      return "\(agent.displayName) (\(aiAgentID))"
+    }
+
+    if let aiAgentID {
+      return aiAgentID
+    }
+
+    return "Shared"
   }
 }

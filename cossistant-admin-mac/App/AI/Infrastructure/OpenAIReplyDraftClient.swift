@@ -55,15 +55,15 @@ struct OpenAIReplyDraftClient {
     conversationTitle: String?,
     websiteName: String?
   ) async throws -> String {
-    guard let url = URL(string: "https://api.openai.com/v1/responses") else {
-      throw ConversationAssistantError.invalidResponse
-    }
-
     let developerPrompt = """
     You are helping a customer support agent write a reply draft.
     Use the provided conversation transcript as the only source of truth.
-    Infer the customer's language from the transcript and rewrite the operator draft into a natural, professional support reply in that same language.
-    Preserve the intent of the operator draft, avoid inventing facts, and return only the final reply text with no framing.
+    Infer the customer's language from the transcript and translate or lightly rewrite the operator draft into that same language.
+    Keep the result as close as possible to the operator draft's meaning, structure, length, and level of detail.
+    Do not add extra troubleshooting steps, explanations, promises, policy statements, greetings, apologies, or sign-offs unless they are already present in the operator draft or clearly required to translate it naturally.
+    Do not introduce any new facts or suggestions from the transcript on your own. The transcript is only for context, tone, references, and language resolution.
+    If the operator draft is short, keep the result short. If it is direct, keep it direct.
+    Return only the final reply text with no framing.
     """
 
     let userPrompt = """
@@ -73,9 +73,71 @@ struct OpenAIReplyDraftClient {
     Conversation transcript (JSON):
     \(transcript)
 
-    Operator draft in their own language:
+    Operator draft to preserve closely:
     \(operatorDraft)
     """
+
+    return try await performRequest(
+      developerPrompt: developerPrompt,
+      userPrompt: userPrompt,
+      failureContext: "OpenAI draft request failed"
+    )
+  }
+
+  func generateFAQReply(
+    transcript: String,
+    faq: DashboardKnowledge,
+    conversationTitle: String?,
+    websiteName: String?,
+    visitorLanguage: String?,
+    visitorTitleLanguage: String?
+  ) async throws -> String {
+    guard let faqPayload = faq.faqPayload else {
+      throw ConversationAssistantError.server(
+        message: "The selected knowledge entry is not a FAQ."
+      )
+    }
+
+    let developerPrompt = """
+    You are helping a customer support agent reply to a conversation using one selected FAQ entry.
+    Use the provided conversation transcript and the provided FAQ entry as the only sources of truth.
+    Treat the FAQ answer as authoritative, do not invent product details or policy, and draft the most helpful answer you can while staying grounded in the FAQ.
+    Write in the visitor's language. Prefer the explicit language hints when present; otherwise infer the language from the transcript.
+    Return only the final reply text with no framing, explanation, bullets, or quotation marks.
+    """
+
+    let userPrompt = """
+    Workspace: \(websiteName ?? "Cossistant")
+    Conversation title: \(conversationTitle ?? "Untitled conversation")
+    Visitor language hint: \(visitorLanguage ?? "unknown")
+    Visitor title language hint: \(visitorTitleLanguage ?? "unknown")
+
+    Selected FAQ entry:
+    FAQ title: \(faq.sourceTitle ?? faq.titleText)
+    Question: \(faqPayload.question)
+    Answer: \(faqPayload.answer)
+    Categories: \(faqPayload.categories.joined(separator: ", ").nilIfEmpty ?? "none")
+    Related questions: \(faqPayload.relatedQuestions.joined(separator: " | ").nilIfEmpty ?? "none")
+
+    Conversation transcript (JSON):
+    \(transcript)
+    """
+
+    return try await performRequest(
+      developerPrompt: developerPrompt,
+      userPrompt: userPrompt,
+      failureContext: "OpenAI FAQ resolution request failed"
+    )
+  }
+
+  private func performRequest(
+    developerPrompt: String,
+    userPrompt: String,
+    failureContext: String
+  ) async throws -> String {
+    guard let url = URL(string: "https://api.openai.com/v1/responses") else {
+      throw ConversationAssistantError.invalidResponse
+    }
 
     let body = RequestBody(
       model: Self.model,
@@ -105,7 +167,7 @@ struct OpenAIReplyDraftClient {
 
     guard (200...299).contains(httpResponse.statusCode) else {
       throw ConversationAssistantError.server(
-        message: "OpenAI draft request failed (\(httpResponse.statusCode))."
+        message: "\(failureContext) (\(httpResponse.statusCode))."
       )
     }
 
@@ -125,5 +187,12 @@ struct OpenAIReplyDraftClient {
     }
 
     throw ConversationAssistantError.invalidResponse
+  }
+}
+
+private extension String {
+  var nilIfEmpty: String? {
+    let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 }

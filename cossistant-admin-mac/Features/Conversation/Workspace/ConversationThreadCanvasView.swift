@@ -16,6 +16,7 @@ struct ConversationThreadCanvasView: View {
   let showDeveloperLogs: Bool
   let translatedMessagesByID: [String: DashboardMessageTranslation]
   let translatedClarification: DashboardMessageTranslation?
+  let timelinePresentation: DashboardTimelinePresentationBundle?
   let canLoadMoreTimeline: Bool
   let isLoadingMoreTimeline: Bool
   let onLoadMoreTimeline: () -> Void
@@ -97,7 +98,8 @@ struct ConversationThreadCanvasView: View {
           showDeveloperLogs: showDeveloperLogs,
           canLoadMoreTimeline: canLoadMoreTimeline,
           isLoadingMoreTimeline: isLoadingMoreTimeline,
-          onLoadMoreTimeline: onLoadMoreTimeline
+          onLoadMoreTimeline: onLoadMoreTimeline,
+          presentation: timelinePresentation
         )
         .frame(maxWidth: .infinity)
         .padding(.horizontal, ConversationWorkspaceLayout.panePadding)
@@ -114,24 +116,30 @@ private struct ConversationClarificationPanel: View {
   let translatedQuestion: String?
   let onDismiss: () -> Void
 
+  @ViewBuilder
   var body: some View {
-    guard let clarification = conversation.activeClarification else {
-      return AnyView(EmptyView())
-    }
-
-    return AnyView(
+    if let clarification = conversation.activeClarification {
       VStack(alignment: .leading, spacing: 12) {
         HStack(alignment: .top, spacing: 12) {
           Image(systemSymbol: .questionmarkBubbleFill)
             .font(.title3)
             .foregroundStyle(.indigo)
+            .frame(width: 24, height: 24)
 
-          VStack(alignment: .leading, spacing: 4) {
-            Text("Knowledge Clarification")
-              .font(.headline)
+          VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+              Text("Knowledge Clarification")
+                .font(.headline)
+
+              WorkspaceInlineBadge(
+                title: clarification.status.replacingOccurrences(of: "_", with: " ").capitalized,
+                systemImage: .sparklesRectangleStack,
+                tint: .indigo
+              )
+            }
 
             Text(clarificationStatusSummary(for: clarification))
-              .font(.subheadline)
+              .font(.caption)
               .foregroundStyle(.secondary)
           }
 
@@ -142,16 +150,14 @@ private struct ConversationClarificationPanel: View {
           } label: {
             Image(systemSymbol: .xmark)
               .font(.caption.weight(.semibold))
-              .foregroundStyle(.tertiary)
+              .frame(width: 24, height: 24)
           }
           .buttonStyle(.plain)
+          .foregroundStyle(.tertiary)
+          .background(.quaternary.opacity(0.16), in: Circle())
+          .contentShape(Circle())
           .help("Dismiss clarification")
-
-          WorkspaceInlineBadge(
-            title: clarification.status.replacingOccurrences(of: "_", with: " ").capitalized,
-            systemImage: .sparklesRectangleStack,
-            tint: .indigo
-          )
+          .accessibilityLabel("Dismiss clarification")
         }
 
         if let question = displayedQuestion(for: clarification),
@@ -162,13 +168,17 @@ private struct ConversationClarificationPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
 
-        Text("The Mac client currently shows the live clarification state and prompt. The interactive answer, retry, and draft-review flow still depends on the newer clarification APIs used by the web dashboard.")
+        Text("Reply, retry, and draft review still use the newer clarification workflow in the web dashboard.")
           .font(.caption)
           .foregroundStyle(.tertiary)
       }
       .padding(16)
-      .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    )
+      .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .strokeBorder(.separator.opacity(0.14), lineWidth: 1)
+      }
+    }
   }
 
   private func clarificationStatusSummary(for clarification: DashboardConversation.Clarification) -> String {

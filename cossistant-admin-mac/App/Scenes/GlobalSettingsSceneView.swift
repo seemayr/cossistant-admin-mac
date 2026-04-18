@@ -5,14 +5,16 @@ struct GlobalSettingsSceneView: View {
   @State private var store = SettingsStore()
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        Text("Settings")
-          .font(.title2.weight(.semibold))
-
-        GlobalServiceSettingsCard(store: store)
+    Form {
+      GlobalServiceSettingsCard(store: store)
+    }
+    .formStyle(.grouped)
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        Button("Save") {
+          store.save()
+        }
       }
-      .padding(24)
     }
     .task {
       store.reload()

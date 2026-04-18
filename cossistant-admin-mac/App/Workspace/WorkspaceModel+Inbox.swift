@@ -4,7 +4,7 @@ import CossistantAdmin
 @MainActor
 extension WorkspaceModel {
   func conversations(in scope: InboxScope) -> [DashboardConversation] {
-    inboxStore.conversations(in: scope, isUnread: conversationHasUnreadActivity)
+    inboxStore.conversations(in: scope)
   }
 
   var canStartAutoResolve: Bool {
@@ -14,7 +14,7 @@ extension WorkspaceModel {
   }
 
   func conversationCount(for scope: InboxScope) -> Int {
-    inboxStore.conversationCount(for: scope, isUnread: conversationHasUnreadActivity)
+    inboxStore.conversationCount(for: scope)
   }
 
   func clearConversationFilters() {
@@ -31,7 +31,7 @@ extension WorkspaceModel {
     guard autoResolveEligibleScope(scope) else { return [] }
 
     let scopedConversations = inboxStore.conversations
-      .filter { inboxStore.conversation($0, isIncludedIn: scope, isUnread: conversationHasUnreadActivity) }
+      .filter { inboxStore.conversation($0, isIncludedIn: scope) }
       .filter { !$0.isArchived }
       .filter { $0.status == .open }
       .filter { autoResolveShouldReview($0) }

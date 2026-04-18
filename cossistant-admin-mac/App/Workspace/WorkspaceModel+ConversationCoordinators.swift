@@ -52,9 +52,6 @@ extension WorkspaceModel {
       setConversationLastSeenAt: { [weak self] conversationID, lastSeenAt in
         self?.setConversationLastSeenAt(conversationID: conversationID, lastSeenAt: lastSeenAt)
       },
-      setConversationTeamLastSeenAt: { [weak self] conversationID, lastSeenAt in
-        self?.setConversationTeamLastSeenAt(conversationID: conversationID, lastSeenAt: lastSeenAt)
-      },
       syncConversationSeenState: { [weak self] conversationID, seenData, fallbackCurrentActorSeenAt in
         self?.syncConversationSeenState(
           conversationID: conversationID,

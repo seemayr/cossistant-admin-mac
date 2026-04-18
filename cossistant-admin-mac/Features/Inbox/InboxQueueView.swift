@@ -10,7 +10,7 @@ struct InboxQueueView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      InboxQueueHeaderView(model: model, store: store, scope: scope)
+      InboxQueueHeaderView(store: store, scope: scope)
 
       List(displayedConversations, selection: $selection) { conversation in
         InboxConversationRow(
@@ -61,6 +61,7 @@ struct InboxQueueView: View {
     guard let selection,
           let selectedConversation = model.selectedConversation,
           selectedConversation.id == selection,
+          scope.includes(selectedConversation),
           !filteredConversations.contains(where: { $0.id == selectedConversation.id }) else {
       return filteredConversations
     }

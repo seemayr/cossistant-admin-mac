@@ -24,11 +24,11 @@ struct InspectorCard<Content: View>: View {
       content
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(18)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: ConversationWorkspaceLayout.cardCornerRadius, style: .continuous))
+    .padding(16)
+    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: ConversationWorkspaceLayout.cardCornerRadius, style: .continuous))
     .overlay {
       RoundedRectangle(cornerRadius: ConversationWorkspaceLayout.cardCornerRadius, style: .continuous)
-        .strokeBorder(.separator.opacity(0.18), lineWidth: 1)
+        .strokeBorder(.separator.opacity(0.14), lineWidth: 1)
     }
   }
 }
@@ -44,7 +44,7 @@ struct WorkspaceMetadataPill: View {
       .foregroundStyle(tint)
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
-      .background(.quaternary.opacity(0.28), in: Capsule())
+      .background(.quaternary.opacity(0.18), in: Capsule())
   }
 }
 
@@ -59,7 +59,7 @@ struct WorkspaceInlineBadge: View {
       .foregroundStyle(tint)
       .padding(.horizontal, 10)
       .padding(.vertical, 7)
-      .background(tint.opacity(0.08), in: Capsule())
+      .background(tint.opacity(0.1), in: Capsule())
   }
 }
 

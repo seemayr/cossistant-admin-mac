@@ -10,8 +10,13 @@ final class WorkspaceModel {
   let runtimeCoordinator: WorkspaceRuntimeCoordinator
   let sessionCoordinator: WorkspaceSessionCoordinator
   var inboxRefreshTask: Task<Void, Never>?
+  var selectedConversationLoadTask: Task<Void, Never>?
+  var selectedContactLoadTask: Task<Void, Never>?
+  var selectedKnowledgeLoadTask: Task<Void, Never>?
+  var selectedAIAgentLoadTask: Task<Void, Never>?
 
   let analyticsStore: AnalyticsStore
+  let aiAgentStore: AIAgentStore
   let autoResolveStore: AutoResolveStore
   let contactsStore: ContactsStore
   let conversationStore: ConversationStore
@@ -27,7 +32,11 @@ final class WorkspaceModel {
   var selectedConversationID: DashboardConversation.ID?
   var visitorPresenceByID: [String: DashboardVisitorPresence] = [:]
   var currentActorUserID: String?
-  var manuallyUnreadConversationIDs: Set<String> = []
+  var manuallyUnreadConversationIDs: Set<String> = [] {
+    didSet {
+      inboxStore.setManuallyUnreadConversationIDs(manuallyUnreadConversationIDs)
+    }
+  }
   var showDeveloperLogs = false
   var realtimeConnectionState: DashboardRealtimeConnectionState = .disconnected
   var lastRealtimeEventDate: Date?
@@ -49,6 +58,7 @@ final class WorkspaceModel {
       restoreLastUsedSession: restoreLastUsedSession
     )
     self.analyticsStore = AnalyticsStore()
+    self.aiAgentStore = AIAgentStore()
     self.autoResolveStore = AutoResolveStore()
     self.contactsStore = ContactsStore()
     self.conversationStore = ConversationStore()
@@ -69,6 +79,14 @@ final class WorkspaceModel {
   }
 
   func clearConnectedState() {
+    selectedConversationLoadTask?.cancel()
+    selectedConversationLoadTask = nil
+    selectedContactLoadTask?.cancel()
+    selectedContactLoadTask = nil
+    selectedKnowledgeLoadTask?.cancel()
+    selectedKnowledgeLoadTask = nil
+    selectedAIAgentLoadTask?.cancel()
+    selectedAIAgentLoadTask = nil
     currentProfileID = nil
     website = nil
     organization = nil
@@ -76,8 +94,10 @@ final class WorkspaceModel {
     inboxStore.setConfiguration(nil)
     selectedConversationID = nil
     currentActorUserID = nil
+    manuallyUnreadConversationIDs = []
     contactsStore.setConfiguration(nil)
     knowledgeStore.setConfiguration(nil)
+    aiAgentStore.setConfiguration(nil)
     conversationStore.reset()
     visitorPresenceByID = [:]
     realtimeConnectionState = .disconnected
@@ -85,6 +105,8 @@ final class WorkspaceModel {
   }
 
   func clearSelectedConversationState() {
+    selectedConversationLoadTask?.cancel()
+    selectedConversationLoadTask = nil
     conversationStore.clearSelection()
   }
 }

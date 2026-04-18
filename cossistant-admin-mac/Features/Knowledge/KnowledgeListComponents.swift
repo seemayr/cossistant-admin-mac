@@ -2,26 +2,33 @@ import SwiftUI
 import SFSafeSymbols
 import CossistantAdmin
 
+private let frontendKnowledgeTypes: [DashboardKnowledgeType] = [.faq, .article]
+
 struct KnowledgeSectionHeader: View {
   @Bindable var store: KnowledgeStore
+  let availableAIAgents: [DashboardWebsite.AIAgent]
   let onCreate: (DashboardKnowledgeType) -> Void
 
+  private var soleAvailableAIAgentID: String? {
+    availableAIAgents.count == 1 ? availableAIAgents.first?.id : nil
+  }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top, spacing: 12) {
         VStack(alignment: .leading, spacing: 6) {
           Text("Knowledge")
-            .font(.title2.weight(.semibold))
+            .font(.headline.weight(.semibold))
 
           Text("\(store.totalCount) entries available")
-            .font(.subheadline)
+            .font(.caption)
             .foregroundStyle(.secondary)
         }
 
         Spacer(minLength: 0)
 
         Menu {
-          ForEach(DashboardKnowledgeType.allCases) { type in
+          ForEach(frontendKnowledgeTypes) { type in
             Button("New \(type.label)") {
               onCreate(type)
             }
@@ -52,47 +59,57 @@ struct KnowledgeSectionHeader: View {
           }
         }
 
-        TextField(
-          "AI agent ID filter",
-          text: Binding(
-            get: { store.filterAIAgentID ?? "" },
-            set: { store.filterAIAgentID = $0.dashboardNilIfEmpty }
-          )
-        )
-        .textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: 10) {
+          if soleAvailableAIAgentID == nil {
+            Picker("Knowledge Scope", selection: $store.filterAIAgentScope) {
+              ForEach(KnowledgeAIAgentScope.allCases) { scope in
+                Text(scope.label)
+                  .tag(scope)
+              }
+            }
+            .pickerStyle(.segmented)
 
-        TextField(
-          "Link source ID filter",
-          text: Binding(
-            get: { store.filterLinkSourceID ?? "" },
-            set: { store.filterLinkSourceID = $0.dashboardNilIfEmpty }
-          )
-        )
-        .textFieldStyle(.roundedBorder)
-
+            if store.filterAIAgentScope == .specific {
+              Picker(
+                "AI Agent",
+                selection: Binding(
+                  get: {
+                    store.filterSpecificAIAgentID ?? availableAIAgents.first?.id
+                  },
+                  set: { store.filterSpecificAIAgentID = $0 }
+                )
+              ) {
+                ForEach(availableAIAgents) { agent in
+                  Text(agent.displayName)
+                    .tag(Optional(agent.id))
+                }
+              }
+              .pickerStyle(.menu)
+              .disabled(availableAIAgents.isEmpty)
+            }
+          }
+        }
         HStack(spacing: 10) {
           Stepper("Page size: \(store.pageSize)", value: $store.pageSize, in: 10...100, step: 10)
 
           Spacer(minLength: 0)
 
           Button("Clear Filters") {
-            store.filterType = nil
-            store.filterIncluded = .all
-            store.filterAIAgentID = nil
-            store.filterLinkSourceID = nil
+            store.showAllKnowledge(preferredAIAgentID: soleAvailableAIAgentID)
           }
         }
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 18)
-    .padding(.vertical, 16)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 12)
     .background(.bar)
   }
 }
 
 struct KnowledgeRowView: View {
   let item: DashboardKnowledge
+  let aiAgentLabel: String
 
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
@@ -104,6 +121,11 @@ struct KnowledgeRowView: View {
         Text(item.origin)
           .font(.caption)
           .foregroundStyle(.tertiary)
+          .lineLimit(1)
+
+        Text(aiAgentLabel)
+          .font(.caption)
+          .foregroundStyle(.secondary)
           .lineLimit(1)
       }
 

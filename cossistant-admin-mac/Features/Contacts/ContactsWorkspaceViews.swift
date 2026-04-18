@@ -22,22 +22,5 @@ struct ContactsListView: View {
       }
     }
     .searchable(text: $store.searchText, prompt: "Search contacts, email, metadata")
-    .task(id: contactsQueryKey) {
-      if !store.searchText.isEmpty {
-        try? await Task.sleep(for: .milliseconds(250))
-      }
-
-      guard !Task.isCancelled else { return }
-      await store.refresh()
-    }
-  }
-
-  private var contactsQueryKey: String {
-    [
-      store.searchText,
-      store.sortBy.rawValue,
-      store.sortOrder.rawValue,
-      store.visitorStatus.rawValue,
-    ].joined(separator: "|")
   }
 }

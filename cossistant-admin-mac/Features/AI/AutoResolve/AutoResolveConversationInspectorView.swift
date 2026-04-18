@@ -67,7 +67,8 @@ struct AutoResolveConversationInspectorView: View {
             showDeveloperLogs: false,
             canLoadMoreTimeline: canLoadMoreTimeline,
             isLoadingMoreTimeline: isLoadingMoreTimeline,
-            onLoadMoreTimeline: onLoadMoreTimeline
+            onLoadMoreTimeline: onLoadMoreTimeline,
+            presentation: nil
           )
           .frame(maxWidth: .infinity)
           .padding(.horizontal, 20)

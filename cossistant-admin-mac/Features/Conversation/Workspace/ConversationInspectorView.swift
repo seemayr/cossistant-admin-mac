@@ -15,181 +15,170 @@ struct ConversationInspectorView: View {
   let onUpdateConversationMetadata: @MainActor (DashboardMetadata) async throws -> Void
 
   var body: some View {
-    VStack(spacing: 0) {
-      VStack(alignment: .leading, spacing: 2) {
-        Text("Inspector")
-          .font(.headline)
+    ScrollView {
+      VStack(alignment: .leading, spacing: 16) {
+        InspectorCard {
+          HStack(alignment: .top, spacing: 14) {
+            AvatarPreviewButton(
+              name: conversation.visitorDisplayName,
+              imageURL: visitor?.contact?.image ?? conversation.visitorAvatarURL,
+              seed: visitor?.contact?.avatarSeed ?? conversation.visitorAvatarSeed,
+              size: 46,
+              showsActivePresence: visitorPresence?.isActive == true
+            )
 
-        Text("Visitor context and conversation state")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.horizontal, 20)
-      .padding(.vertical, 16)
+            VStack(alignment: .leading, spacing: 6) {
+              Text(conversation.visitorDisplayName)
+                .font(.headline)
 
-      Divider()
-
-      ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
-          InspectorCard {
-            HStack(alignment: .top, spacing: 14) {
-              AvatarPreviewButton(
-                name: conversation.visitorDisplayName,
-                imageURL: visitor?.contact?.image ?? conversation.visitorAvatarURL,
-                seed: visitor?.contact?.avatarSeed ?? conversation.visitorAvatarSeed,
-                size: 46,
-                showsActivePresence: visitorPresence?.isActive == true
-              )
-
-              VStack(alignment: .leading, spacing: 6) {
-                Text(conversation.visitorDisplayName)
-                  .font(.headline)
-
-                if let email = visitor?.contact?.email ?? conversation.visitor.contact?.email {
-                  Text(email)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                }
-
-                Text("Visitor \(conversation.visitorId)")
-                  .font(.caption)
-                  .foregroundStyle(.tertiary)
+              if let email = visitor?.contact?.email ?? conversation.visitor.contact?.email {
+                Text(email)
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
                   .textSelection(.enabled)
               }
 
-              Spacer(minLength: 0)
+              Text("Visitor \(conversation.visitorId)")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .textSelection(.enabled)
             }
 
-            HStack(spacing: 8) {
-              WorkspaceInlineBadge(
-                title: visitor?.isBlocked == true || conversation.visitor.isBlocked
-                  ? "Blocked"
-                  : visitorPresence?.isActive == true ? "Active now" : "Inactive",
-                systemImage: visitor?.isBlocked == true || conversation.visitor.isBlocked
-                  ? .handRaisedFill
-                  : visitorPresence?.isActive == true ? .dotRadiowavesLeftAndRight : .personCropCircleBadgeCheckmark,
-                tint: visitor?.isBlocked == true || conversation.visitor.isBlocked
-                  ? .red
-                  : visitorPresence?.isActive == true ? .green : .secondary
-              )
-
-              if let location = visitorLocation {
-                WorkspaceInlineBadge(
-                  title: location,
-                  systemImage: .location,
-                  tint: .secondary
-                )
-              }
-            }
+            Spacer(minLength: 0)
           }
 
-          InspectorCard {
-            ConversationMetadataSection(
-              metadata: detail?.metadata ?? conversation.metadata ?? [:],
-              onSave: { metadata in
-                try await onUpdateConversationMetadata(metadata)
-              }
+          HStack(spacing: 8) {
+            WorkspaceInlineBadge(
+              title: visitor?.isBlocked == true || conversation.visitor.isBlocked
+                ? "Blocked"
+                : visitorPresence?.isActive == true ? "Active now" : "Inactive",
+              systemImage: visitor?.isBlocked == true || conversation.visitor.isBlocked
+                ? .handRaisedFill
+                : visitorPresence?.isActive == true ? .dotRadiowavesLeftAndRight : .personCropCircleBadgeCheckmark,
+              tint: visitor?.isBlocked == true || conversation.visitor.isBlocked
+                ? .red
+                : visitorPresence?.isActive == true ? .green : .secondary
             )
-          }
 
-          if showDeveloperLogs {
-            InspectorCard(title: "Seen Debug") {
+            if let location = visitorLocation {
+              WorkspaceInlineBadge(
+                title: location,
+                systemImage: .location,
+                tint: .secondary
+              )
+            }
+          }
+        }
+
+        InspectorCard {
+          ConversationMetadataSection(
+            metadata: detail?.metadata ?? conversation.metadata ?? [:],
+            onSave: { metadata in
+              try await onUpdateConversationMetadata(metadata)
+            }
+          )
+        }
+
+        if showDeveloperLogs {
+          InspectorCard(title: "Seen Debug") {
             ConversationSeenDebugSection(
               conversation: conversation,
               listSnapshotConversation: listSnapshotConversation,
               detail: detail,
               seenData: seenData,
               debugState: seenDebugState
-              )
-            }
+            )
           }
+        }
 
-          if let clarification = conversation.activeClarification {
-            InspectorCard(title: "Clarification") {
-              InspectorFieldList(rows: [
-                ("Status", clarification.status.replacingOccurrences(of: "_", with: " ").capitalized),
-                ("Question", clarification.question?.nilIfEmpty ?? "No question text"),
-                ("Updated", absoluteTime(for: clarification.updatedAt) ?? clarification.updatedAt),
-                ("Request ID", clarification.requestId),
-              ])
-            }
-          }
-
-          if let visitor, let metadata = visitor.contact?.metadata, !metadata.isEmpty {
-            InspectorCard(title: "Metadata") {
-              InspectorMetadataList(metadata: metadata)
-            }
-          }
-
-          InspectorCard(title: "Presence") {
-            VStack(alignment: .leading, spacing: 12) {
-              WorkspaceInlineBadge(
-                title: syncText,
-                systemImage: syncSymbol,
-                tint: syncTint
-              )
-
-              if visitorPresence?.isActive == true {
-                WorkspaceInlineBadge(
-                  title: "Visitor active now",
-                  systemImage: .dotRadiowavesLeftAndRight,
-                  tint: .green
-                )
-              }
-
-              if seenData.isEmpty {
-                Text("No read receipts available yet.")
-                  .font(.caption)
-                  .foregroundStyle(.tertiary)
-              } else {
-                InspectorFieldList(rows: seenData.prefix(4).map {
-                  ($0.actorLabel, relativeTime(for: $0.lastSeenAt))
-                })
-              }
-            }
-          }
-
-          InspectorCard(title: "Conversation") {
+        if let clarification = conversation.activeClarification {
+          InspectorCard(title: "Clarification") {
             InspectorFieldList(rows: [
-              ("Status", detail?.status.label ?? conversation.status.label),
-              ("Archived", conversation.isArchived ? "Yes" : "No"),
-              ("Priority", conversation.priority.label),
-              ("Channel", conversation.channelLabel),
-              ("Created", conversation.createdRelativeText),
-              ("Last activity", conversation.lastActivityRelativeText),
-              ("Sentiment", conversation.sentimentSummary),
-              ("Rating", ratingText),
-              ("Conversation ID", conversation.id),
-              ("Visitor ID", conversation.visitorId),
+              ("Status", clarification.status.replacingOccurrences(of: "_", with: " ").capitalized),
+              ("Question", clarification.question?.nilIfEmpty ?? "No question text"),
+              ("Updated", absoluteTime(for: clarification.updatedAt) ?? clarification.updatedAt),
+              ("Request ID", clarification.requestId),
             ])
           }
+        }
 
-          if let visitor {
-            InspectorCard(title: "Visitor") {
-              InspectorFieldList(rows: [
-                ("Created", absoluteTime(for: visitor.createdAt) ?? visitor.createdAt),
-                ("Updated", absoluteTime(for: visitor.updatedAt) ?? visitor.updatedAt),
-                ("Last Seen", absoluteTime(for: visitor.lastSeenAt) ?? "Not seen yet"),
-              ])
+        if let visitor, let metadata = visitor.contact?.metadata, !metadata.isEmpty {
+          InspectorCard(title: "Metadata") {
+            InspectorMetadataList(metadata: metadata)
+          }
+        }
+
+        InspectorCard(title: "Presence") {
+          VStack(alignment: .leading, spacing: 12) {
+            WorkspaceInlineBadge(
+              title: syncText,
+              systemImage: syncSymbol,
+              tint: syncTint
+            )
+
+            if visitorPresence?.isActive == true {
+              WorkspaceInlineBadge(
+                title: "Visitor active now",
+                systemImage: .dotRadiowavesLeftAndRight,
+                tint: .green
+              )
             }
 
-            InspectorCard(title: "Device") {
-              InspectorFieldList(rows: [
-                ("Device", [visitor.device, visitor.deviceType].compactMap { $0 }.joined(separator: " • ").nilIfEmpty ?? "Unknown"),
-                ("OS", [visitor.os, visitor.osVersion].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "Unknown"),
-                ("Browser", [visitor.browser, visitor.browserVersion].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "Unknown"),
-                ("Language", visitor.language ?? "Unknown"),
-                ("Timezone", visitor.timezone ?? "Unknown"),
-              ])
+            if seenData.isEmpty {
+              Text("No read receipts available yet.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            } else {
+              InspectorFieldList(rows: seenData.prefix(4).map {
+                ($0.actorLabel, relativeTime(for: $0.lastSeenAt))
+              })
             }
           }
         }
-        .padding(20)
+
+        InspectorCard(title: "Conversation") {
+          InspectorFieldList(rows: [
+            ("Status", detail?.status.label ?? conversation.status.label),
+            ("Archived", conversation.isArchived ? "Yes" : "No"),
+            ("Priority", conversation.priority.label),
+            ("Channel", conversation.channelLabel),
+            ("Created", conversation.createdRelativeText),
+            ("Last activity", conversation.lastActivityRelativeText),
+            ("Sentiment", conversation.sentimentSummary),
+            ("Rating", ratingText),
+            ("Conversation ID", conversation.id),
+            ("Visitor ID", conversation.visitorId),
+          ])
+        }
+
+        if let visitor {
+          InspectorCard {
+            VStack(alignment: .leading, spacing: 16) {
+              InspectorCard(title: "Visitor") {
+                InspectorFieldList(rows: [
+                  ("Created", absoluteTime(for: visitor.createdAt) ?? visitor.createdAt),
+                  ("Updated", absoluteTime(for: visitor.updatedAt) ?? visitor.updatedAt),
+                  ("Last Seen", absoluteTime(for: visitor.lastSeenAt) ?? "Not seen yet"),
+                ])
+              }
+
+              InspectorCard(title: "Device") {
+                InspectorFieldList(rows: [
+                  ("Device", [visitor.device, visitor.deviceType].compactMap { $0 }.joined(separator: " • ").nilIfEmpty ?? "Unknown"),
+                  ("OS", [visitor.os, visitor.osVersion].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "Unknown"),
+                  ("Browser", [visitor.browser, visitor.browserVersion].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "Unknown"),
+                  ("Language", visitor.language ?? "Unknown"),
+                  ("Timezone", visitor.timezone ?? "Unknown"),
+                ])
+              }
+            }
+          }
+        }
       }
+      .padding(16)
     }
-    .background(.thinMaterial)
+    .background(.clear)
+    .controlSize(.small)
   }
 
   private var visitorLocation: String? {
@@ -731,7 +720,6 @@ private struct ConversationSeenDebugSection: View {
       ("Auto-Seen Eligible Right Now", yesNo(debugState.autoSeenShouldAttempt)),
       ("Current Actor User ID", debugState.currentActorUserID ?? "nil"),
       ("Current Actor Seen From Receipts", absoluteTime(for: currentActorSeenAt) ?? currentActorSeenAt ?? "nil"),
-      ("Team Seen From Receipts", absoluteTime(for: currentTeamSeenAt) ?? currentTeamSeenAt ?? "nil"),
       ("Route", debugState.routeTitle),
       ("Load State", debugState.loadStateDescription),
       ("Selected Conversation ID", debugState.selectedConversationID ?? "nil"),
@@ -781,12 +769,15 @@ private struct ConversationSeenDebugSection: View {
       ("Visitor ID", conversation.visitorId),
       ("Channel", conversation.channel),
       ("Title", conversation.title ?? "nil"),
+      ("Visitor Title", conversation.visitorTitle ?? "nil"),
+      ("Visitor Title Language", conversation.visitorTitleLanguage ?? "nil"),
+      ("Visitor Language", conversation.visitorLanguage ?? "nil"),
+      ("Title Source", conversation.titleSource ?? "nil"),
       ("Created At", absoluteTime(for: conversation.createdAt) ?? conversation.createdAt),
       ("Updated At", absoluteTime(for: conversation.updatedAt) ?? conversation.updatedAt),
       ("Deleted At", absoluteTime(for: conversation.deletedAt) ?? conversation.deletedAt ?? "nil"),
       ("Last Message At", absoluteTime(for: conversation.lastMessageAt) ?? conversation.lastMessageAt ?? "nil"),
       ("Last Seen At", absoluteTime(for: conversation.lastSeenAt) ?? conversation.lastSeenAt ?? "nil"),
-      ("Team Last Seen At", absoluteTime(for: conversation.teamLastSeenAt) ?? conversation.teamLastSeenAt ?? "nil"),
       ("Visitor Last Seen At", absoluteTime(for: conversation.visitor.lastSeenAt) ?? conversation.visitor.lastSeenAt ?? "nil"),
       ("Effective Seen Date", conversation.effectiveSeenDate.map(absoluteTime(for:)) ?? "nil"),
       ("Latest Activity Date", absoluteTime(for: conversation.latestActivityDate)),
@@ -799,6 +790,8 @@ private struct ConversationSeenDebugSection: View {
       ("Escalated At", absoluteTime(for: conversation.escalatedAt) ?? conversation.escalatedAt ?? "nil"),
       ("Escalation Handled At", absoluteTime(for: conversation.escalationHandledAt) ?? conversation.escalationHandledAt ?? "nil"),
       ("AI Paused Until", absoluteTime(for: conversation.aiPausedUntil) ?? conversation.aiPausedUntil ?? "nil"),
+      ("Translation Activated At", absoluteTime(for: conversation.translationActivatedAt) ?? conversation.translationActivatedAt ?? "nil"),
+      ("Translation Charged At", absoluteTime(for: conversation.translationChargedAt) ?? conversation.translationChargedAt ?? "nil"),
       ("Metadata Count", String(conversation.metadata?.count ?? 0)),
       ("Visitor Is Blocked", yesNo(conversation.visitor.isBlocked)),
       ("Visitor Contact ID", conversation.visitor.contact?.id ?? "nil"),
@@ -818,6 +811,9 @@ private struct ConversationSeenDebugSection: View {
     [
       ("ID", detail.id),
       ("Title", detail.title ?? "nil"),
+      ("Visitor Title", detail.visitorTitle ?? "nil"),
+      ("Visitor Title Language", detail.visitorTitleLanguage ?? "nil"),
+      ("Visitor Language", detail.visitorLanguage ?? "nil"),
       ("Status", detail.status.rawValue),
       ("Website ID", detail.websiteId),
       ("Visitor ID", detail.visitorId),
@@ -827,6 +823,8 @@ private struct ConversationSeenDebugSection: View {
       ("Visitor Rating", detail.visitorRating.map(String.init) ?? "nil"),
       ("Visitor Rating At", absoluteTime(for: detail.visitorRatingAt) ?? detail.visitorRatingAt ?? "nil"),
       ("Visitor Last Seen At", absoluteTime(for: detail.visitorLastSeenAt) ?? detail.visitorLastSeenAt ?? "nil"),
+      ("Translation Activated At", absoluteTime(for: detail.translationActivatedAt) ?? detail.translationActivatedAt ?? "nil"),
+      ("Translation Charged At", absoluteTime(for: detail.translationChargedAt) ?? detail.translationChargedAt ?? "nil"),
       ("Metadata Count", String(detail.metadata?.count ?? 0)),
       ("Last Timeline Item", timelineItemSummary(detail.lastTimelineItem)),
     ]
@@ -887,7 +885,6 @@ private struct ConversationSeenDebugSection: View {
         "realtimeConnectionDescription": .string(debugState.realtimeConnectionDescription),
         "lastRealtimeEventAt": jsonString(debugState.lastRealtimeEventAt),
         "currentActorSeenAt": jsonString(currentActorSeenAt),
-        "teamSeenAt": jsonString(currentTeamSeenAt),
       ]),
       "displayedRows": .object([
         "unreadResolution": rowsJSONObject(unreadResolutionRows),
@@ -920,12 +917,15 @@ private struct ConversationSeenDebugSection: View {
       "visitorId": .string(conversation.visitorId),
       "channel": .string(conversation.channel),
       "title": jsonString(conversation.title),
+      "visitorTitle": jsonString(conversation.visitorTitle),
+      "visitorTitleLanguage": jsonString(conversation.visitorTitleLanguage),
+      "visitorLanguage": jsonString(conversation.visitorLanguage),
+      "titleSource": jsonString(conversation.titleSource),
       "createdAt": .string(conversation.createdAt),
       "updatedAt": .string(conversation.updatedAt),
       "deletedAt": jsonString(conversation.deletedAt),
       "lastMessageAt": jsonString(conversation.lastMessageAt),
       "lastSeenAt": jsonString(conversation.lastSeenAt),
-      "teamLastSeenAt": jsonString(conversation.teamLastSeenAt),
       "effectiveSeenDate": jsonString(conversation.effectiveSeenDate?.ISO8601Format()),
       "latestActivityDate": .string(conversation.latestActivityDate.ISO8601Format()),
       "hasContent": .bool(conversation.hasContent),
@@ -938,6 +938,8 @@ private struct ConversationSeenDebugSection: View {
       "escalatedAt": jsonString(conversation.escalatedAt),
       "escalationHandledAt": jsonString(conversation.escalationHandledAt),
       "aiPausedUntil": jsonString(conversation.aiPausedUntil),
+      "translationActivatedAt": jsonString(conversation.translationActivatedAt),
+      "translationChargedAt": jsonString(conversation.translationChargedAt),
       "metadata": conversation.metadata.map(JSONValue.object) ?? .null,
       "visitor": .object([
         "id": .string(conversation.visitor.id),
@@ -972,6 +974,9 @@ private struct ConversationSeenDebugSection: View {
     .object([
       "id": .string(detail.id),
       "title": jsonString(detail.title),
+      "visitorTitle": jsonString(detail.visitorTitle),
+      "visitorTitleLanguage": jsonString(detail.visitorTitleLanguage),
+      "visitorLanguage": jsonString(detail.visitorLanguage),
       "metadata": detail.metadata.map(JSONValue.object) ?? .null,
       "createdAt": .string(detail.createdAt),
       "updatedAt": .string(detail.updatedAt),
@@ -982,6 +987,8 @@ private struct ConversationSeenDebugSection: View {
       "visitorRatingAt": jsonString(detail.visitorRatingAt),
       "deletedAt": jsonString(detail.deletedAt),
       "visitorLastSeenAt": jsonString(detail.visitorLastSeenAt),
+      "translationActivatedAt": jsonString(detail.translationActivatedAt),
+      "translationChargedAt": jsonString(detail.translationChargedAt),
       "lastTimelineItem": dashboardTimelineItemJSONObject(detail.lastTimelineItem),
     ])
   }
@@ -1074,15 +1081,6 @@ private struct ConversationSeenDebugSection: View {
 
     return seenData
       .filter { $0.userId == currentActorUserID }
-      .max { left, right in
-        (left.lastSeenDate ?? .distantPast) < (right.lastSeenDate ?? .distantPast)
-      }?
-      .lastSeenAt
-  }
-
-  private var currentTeamSeenAt: String? {
-    seenData
-      .filter { $0.userId != nil }
       .max { left, right in
         (left.lastSeenDate ?? .distantPast) < (right.lastSeenDate ?? .distantPast)
       }?

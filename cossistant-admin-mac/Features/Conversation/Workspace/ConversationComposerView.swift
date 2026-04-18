@@ -5,17 +5,23 @@ import UniformTypeIdentifiers
 import CossistantAdmin
 
 struct ConversationComposerView: View {
+  @Binding var draftText: String
+  @Binding var visibility: DashboardTimelineItemVisibility
   let canUseOpenAIReplyDrafts: Bool
+  let canUseTranslationPreview: Bool
   let isGeneratingReplyDraft: Bool
   let replyDraftErrorMessage: String?
   let onGenerateReplyDraft: @MainActor @Sendable (String) async -> String?
+  let onPreviewTranslation: @MainActor @Sendable (String) async throws -> DashboardMessageTranslation
   let onSendMessage: @MainActor @Sendable (String, DashboardTimelineItemVisibility, [DashboardComposerAttachment]) async -> Void
 
-  @State private var draftText = ""
-  @State private var visibility: DashboardTimelineItemVisibility = .public
   @State private var isSending = false
   @State private var attachments: [DashboardComposerAttachment] = []
   @State private var attachmentErrorMessage: String?
+  @State private var isPreviewingTranslation = false
+  @State private var translationPreview: DashboardMessageTranslation?
+  @State private var translationPreviewErrorMessage: String?
+  @State private var isShowingTranslationPreview = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -43,6 +49,19 @@ struct ConversationComposerView: View {
           }
           .buttonStyle(.bordered)
           .disabled(isGeneratingReplyDraft || draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+
+        if canUseTranslationPreview {
+          Button {
+            Task {
+              await previewTranslation()
+            }
+          } label: {
+            Image(systemSymbol: .globe)
+          }
+          .buttonStyle(.bordered)
+          .disabled(isSending || isGeneratingReplyDraft || isPreviewingTranslation || draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .help("Preview translation")
         }
 
         Button {
@@ -107,10 +126,24 @@ struct ConversationComposerView: View {
           .foregroundStyle(.orange)
       }
 
+      if let translationPreviewErrorMessage {
+        Text(translationPreviewErrorMessage)
+          .font(.caption)
+          .foregroundStyle(.orange)
+      }
+
       if let attachmentErrorMessage {
         Text(attachmentErrorMessage)
           .font(.caption)
           .foregroundStyle(.orange)
+      }
+    }
+    .sheet(isPresented: $isShowingTranslationPreview) {
+      if let translationPreview {
+        ConversationDraftTranslationSheet(
+          originalText: draftText.trimmingCharacters(in: .whitespacesAndNewlines),
+          translation: translationPreview
+        )
       }
     }
   }
@@ -139,10 +172,10 @@ struct ConversationComposerView: View {
     }
 
     isSending = true
-    draftText = ""
     attachments = []
     attachmentErrorMessage = nil
     await onSendMessage(message, visibility, currentAttachments)
+    draftText = ""
     isSending = false
   }
 
@@ -152,6 +185,23 @@ struct ConversationComposerView: View {
     guard !currentText.isEmpty else { return }
     guard let generatedDraft = await onGenerateReplyDraft(currentText) else { return }
     draftText = generatedDraft
+  }
+
+  @MainActor
+  private func previewTranslation() async {
+    let currentText = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !currentText.isEmpty else { return }
+
+    isPreviewingTranslation = true
+    translationPreviewErrorMessage = nil
+    defer { isPreviewingTranslation = false }
+
+    do {
+      translationPreview = try await onPreviewTranslation(currentText)
+      isShowingTranslationPreview = true
+    } catch {
+      translationPreviewErrorMessage = error.localizedDescription
+    }
   }
 
   private func removeAttachment(_ id: DashboardComposerAttachment.ID) {
@@ -211,6 +261,40 @@ struct ConversationComposerView: View {
     }
 
     return UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
+  }
+}
+
+private struct ConversationDraftTranslationSheet: View {
+  let originalText: String
+  let translation: DashboardMessageTranslation
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 18) {
+      Text("Translation Preview")
+        .font(.title3.weight(.semibold))
+
+      GroupBox("Current Text") {
+        Text(originalText)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .textSelection(.enabled)
+      }
+
+      GroupBox("Translation") {
+        Text(translation.text)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .textSelection(.enabled)
+      }
+
+      if let detectedSourceLanguage = translation.detectedSourceLanguage,
+         !detectedSourceLanguage.isEmpty {
+        GroupBox("Detected Source Language") {
+          Text(detectedSourceLanguage)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+      }
+    }
+    .padding(24)
+    .frame(minWidth: 420, minHeight: 260)
   }
 }
 

@@ -8,23 +8,13 @@ struct HeaderControlLabel: View {
   let systemImage: SFSymbol
 
   var body: some View {
-    Label {
-      VStack(alignment: .leading, spacing: 1) {
-        Text(title)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-
-        Text(value)
-          .font(.subheadline.weight(.medium))
-          .lineLimit(1)
-      }
-    } icon: {
-      Image(systemSymbol: systemImage)
-        .foregroundStyle(.secondary)
-    }
+    Label(value, systemSymbol: systemImage)
+      .font(.subheadline.weight(.medium))
+      .lineLimit(1)
     .padding(.horizontal, 10)
-    .padding(.vertical, 8)
-    .background(.quinary, in: .rect(cornerRadius: 12))
+    .padding(.vertical, 6)
+    .background(.quinary.opacity(0.8), in: .rect(cornerRadius: 12))
+    .help(title)
   }
 }
 

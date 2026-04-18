@@ -56,16 +56,6 @@ extension WorkspaceModel {
     }
   }
 
-  func setConversationTeamLastSeenAt(
-    conversationID: String,
-    lastSeenAt: String?
-  ) {
-    inboxStore.setConversationTeamLastSeenAt(
-      conversationID: conversationID,
-      lastSeenAt: lastSeenAt
-    )
-  }
-
   func syncConversationSeenState(
     conversationID: String,
     with seenData: [DashboardConversationSeen],
@@ -74,10 +64,6 @@ extension WorkspaceModel {
     setConversationLastSeenAt(
       conversationID: conversationID,
       lastSeenAt: currentActorLastSeenAt(in: seenData) ?? fallbackCurrentActorSeenAt
-    )
-    setConversationTeamLastSeenAt(
-      conversationID: conversationID,
-      lastSeenAt: currentTeamLastSeenAt(in: seenData) ?? fallbackCurrentActorSeenAt
     )
   }
 
@@ -207,11 +193,6 @@ extension WorkspaceModel {
         currentActorUserID = userId
       }
 
-      inboxStore.updateConversationTeamLastSeenAt(
-        conversationID: payload.conversationId,
-        candidateLastSeenAt: payload.lastSeenAt
-      )
-
       if userId == currentActorUserID {
         setConversationLastSeenAt(
           conversationID: payload.conversationId,
@@ -284,15 +265,6 @@ extension WorkspaceModel {
 
     return seenData
       .filter { $0.userId == currentActorUserID }
-      .max { left, right in
-        (left.lastSeenDate ?? .distantPast) < (right.lastSeenDate ?? .distantPast)
-      }?
-      .lastSeenAt
-  }
-
-  private func currentTeamLastSeenAt(in seenData: [DashboardConversationSeen]) -> String? {
-    seenData
-      .filter { $0.userId != nil }
       .max { left, right in
         (left.lastSeenDate ?? .distantPast) < (right.lastSeenDate ?? .distantPast)
       }?

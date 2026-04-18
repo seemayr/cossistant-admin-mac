@@ -87,6 +87,7 @@ extension WorkspaceModel {
       selectedConversationID = nil
       contactsStore.setConfiguration(context.configuration)
       knowledgeStore.setConfiguration(context.configuration)
+      aiAgentStore.setConfiguration(context.configuration)
       clearSelectedConversationState()
       sessionCoordinator.setLastUsedProfileID(context.profile.id)
       isShowingConfigurationSheet = false

@@ -26,6 +26,7 @@ struct ConversationThreadHeaderView: View {
   let onArchiveConversation: @MainActor @Sendable () async -> Void
   let onUnarchiveConversation: @MainActor @Sendable () async -> Void
   let onResolveConversation: @MainActor @Sendable () async -> Void
+  let onResolveFromFAQ: () -> Void
   let onReopenConversation: @MainActor @Sendable () async -> Void
   let onMarkConversationSpam: @MainActor @Sendable () async -> Void
   let onMarkConversationNotSpam: @MainActor @Sendable () async -> Void
@@ -140,6 +141,10 @@ struct ConversationThreadHeaderView: View {
               }
             } label: {
               Label("Resolve", systemSymbol: .checkmark)
+            }
+
+            Button(action: onResolveFromFAQ) {
+              Label("Resolve from FAQ", systemSymbol: .questionmarkBubble)
             }
 
             Button {

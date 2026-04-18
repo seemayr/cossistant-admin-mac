@@ -4,6 +4,7 @@ import CossistantAdmin
 
 struct FAQDraftingWorkspaceView: View {
   @Bindable var store: FAQStore
+  let availableAIAgents: [DashboardWebsite.AIAgent]
   let selectedConversation: DashboardConversation?
   let canBuildFromConversation: Bool
   let onOptimizeDraft: () -> Void
@@ -11,18 +12,19 @@ struct FAQDraftingWorkspaceView: View {
   let onResetDraft: () -> Void
   let onClearSuggestion: () -> Void
   let onApplySuggestionToDraft: () -> Void
+  let onSaveDraftToKnowledge: () async -> Void
+  let onSaveSuggestionToKnowledge: () async -> Void
+  let onSaveAndTrainSuggestion: () async -> Void
+  let onOpenSavedKnowledge: () -> Void
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
+      VStack(alignment: .leading, spacing: 18) {
         Text("FAQ")
-          .font(.largeTitle.weight(.semibold))
-
-        Text("Draft FAQ entries that match the current backend retrieval model. Optimize manual drafts or build a new suggestion from the selected conversation without overwriting your working copy.")
-          .font(.title3)
-          .foregroundStyle(.secondary)
+          .font(.title.weight(.semibold))
 
         faqActionCard
+        knowledgeActionCard
 
         if let status = store.statusMessage {
           Label(status, systemSymbol: .clockArrowTriangleheadCounterclockwiseRotate90)
@@ -71,7 +73,7 @@ struct FAQDraftingWorkspaceView: View {
 
   private var faqActionCard: some View {
     PrototypeInfoCard(title: "Draft Actions") {
-      Text("The current backend embeds only the main Question and Answer. Related Questions and Categories help operators, but they do not carry the main retrieval load.")
+      Text("Question and answer carry the primary retrieval signal. Related questions and categories stay secondary.")
         .font(.subheadline)
         .foregroundStyle(.secondary)
 
@@ -128,6 +130,90 @@ struct FAQDraftingWorkspaceView: View {
       }
     }
   }
+
+  private var knowledgeActionCard: some View {
+    let soleAvailableAIAgentID = availableAIAgents.count == 1 ? availableAIAgents.first?.id : nil
+
+    return PrototypeInfoCard(title: "Knowledge Actions") {
+      Text("Persist the current FAQ directly to the backend knowledge base and optionally queue AI-agent training.")
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+
+      Picker(
+        "Knowledge Owner",
+        selection: Binding(
+          get: { store.selectedAIAgentID ?? soleAvailableAIAgentID },
+          set: { store.selectedAIAgentID = $0 }
+        )
+      ) {
+        if soleAvailableAIAgentID == nil {
+          Text("Shared Knowledge")
+            .tag(nil as String?)
+        }
+
+        ForEach(availableAIAgents) { agent in
+          Text(agent.displayName)
+            .tag(Optional(agent.id))
+        }
+      }
+      .pickerStyle(.menu)
+
+      HStack(spacing: 12) {
+        Button(store.isSavingToKnowledge ? "Saving…" : "Save Draft") {
+          Task {
+            await onSaveDraftToKnowledge()
+          }
+        }
+        .disabled(!store.canSaveDraftToKnowledge)
+
+        Button(store.isSavingToKnowledge ? "Saving…" : "Save Suggestion") {
+          Task {
+            await onSaveSuggestionToKnowledge()
+          }
+        }
+        .disabled(!store.canSaveSuggestionToKnowledge)
+
+        Button(store.isStartingTraining ? "Training…" : "Save & Train") {
+          Task {
+            await onSaveAndTrainSuggestion()
+          }
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(
+          (store.selectedAIAgentID ?? soleAvailableAIAgentID) == nil
+            || store.isSavingToKnowledge
+            || store.isStartingTraining
+            || (!store.canSaveDraftToKnowledge && !store.canSaveSuggestionToKnowledge)
+        )
+
+        Spacer()
+      }
+
+      if let lastSavedKnowledgeTitle = store.lastSavedKnowledgeTitle,
+         let lastSavedKnowledgeID = store.lastSavedKnowledgeID {
+        HStack(spacing: 10) {
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Latest saved knowledge")
+              .font(.caption.weight(.semibold))
+              .foregroundStyle(.secondary)
+
+            Text(lastSavedKnowledgeTitle)
+              .font(.subheadline)
+
+            Text(lastSavedKnowledgeID)
+              .font(.caption.monospaced())
+              .foregroundStyle(.secondary)
+          }
+
+          Spacer(minLength: 0)
+
+          Button("Open in Knowledge") {
+            onOpenSavedKnowledge()
+          }
+        }
+      }
+    }
+  }
 }
 
 private struct FAQDraftEditorCard: View {
@@ -139,7 +225,7 @@ private struct FAQDraftEditorCard: View {
   var body: some View {
     PrototypeInfoCard(title: title) {
       Text(subtitle)
-        .font(.subheadline)
+        .font(.caption)
         .foregroundStyle(.secondary)
 
       VStack(alignment: .leading, spacing: 14) {
@@ -234,7 +320,7 @@ private struct FAQSuggestionCard: View {
         ContentUnavailableView(
           "No suggestion yet",
           systemImage: SFSymbol.questionmarkBubble.rawValue,
-          description: Text("Optimize the manual draft or build a new FAQ from the selected conversation.")
+          description: Text("Optimize the draft or build from the selected conversation.")
         )
       }
     }

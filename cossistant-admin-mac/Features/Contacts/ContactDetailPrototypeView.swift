@@ -15,6 +15,9 @@ struct ContactDetailPrototypeView: View {
     Group {
       if let contact {
         contactDetailContent(contact)
+      } else if store.isLoadingDetail {
+        ProgressView("Loading contact…")
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         ContentUnavailableView(
           "Pick a contact",

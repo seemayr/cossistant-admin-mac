@@ -8,10 +8,18 @@ final class ConversationStore {
   var selectedConversationListSnapshot: DashboardConversation?
   var selectedVisitor: DashboardVisitor?
   var selectedSeenData: [DashboardConversationSeen] = []
-  var selectedTimelineItems: [DashboardTimelineItem] = []
+  var selectedTimelineItems: [DashboardTimelineItem] = [] {
+    didSet {
+      invalidateTimelinePresentation()
+    }
+  }
+  private var selectedTimelinePresentation: DashboardTimelinePresentationBundle?
+  private var selectedTimelinePresentationWithDeveloperLogs: DashboardTimelinePresentationBundle?
   var selectedTimelineNextCursor: String?
   var typingEventsByConversationID: [String: DashboardRealtimeConversationTypingPayload] = [:]
   var aiProcessingByConversationID: [String: DashboardRealtimeAIProcessingState] = [:]
+  var composerDraftText = ""
+  var composerVisibility: DashboardTimelineItemVisibility = .public
   var showTranslations = false
   var selectedConversationLoadState: ConversationSelectionLoadState = .idle
   var isLoadingMoreTimeline = false
@@ -30,17 +38,40 @@ final class ConversationStore {
   }
 
   func clearSelection() {
+    resetSelection(
+      listSnapshot: nil,
+      loadState: .idle
+    )
+  }
+
+  func prepareSelection(_ listSnapshot: DashboardConversation?) {
+    resetSelection(
+      listSnapshot: listSnapshot,
+      loadState: listSnapshot == nil ? .idle : .loading
+    )
+  }
+
+  func markSelectionFailed(_ message: String) {
+    selectedConversationLoadState = .failed(message)
+  }
+
+  private func resetSelection(
+    listSnapshot: DashboardConversation?,
+    loadState: ConversationSelectionLoadState
+  ) {
     selectedConversationDetail = nil
-    selectedConversationListSnapshot = nil
+    selectedConversationListSnapshot = listSnapshot
     selectedVisitor = nil
     selectedSeenData = []
     selectedTimelineItems = []
     selectedTimelineNextCursor = nil
+    composerDraftText = ""
+    composerVisibility = .public
     translatedMessagesByID = [:]
     translatedClarification = nil
     translationErrorMessage = nil
     replyDraftErrorMessage = nil
-    selectedConversationLoadState = .idle
+    selectedConversationLoadState = loadState
   }
 
   func updateSelectedVisitor(_ visitor: DashboardVisitor?) {
@@ -84,6 +115,34 @@ final class ConversationStore {
     } else {
       selectedTimelineItems.insert(item, at: 0)
     }
+  }
+
+  func timelinePresentation(
+    includeDeveloperLogs: Bool
+  ) -> DashboardTimelinePresentationBundle {
+    if includeDeveloperLogs {
+      if let selectedTimelinePresentationWithDeveloperLogs {
+        return selectedTimelinePresentationWithDeveloperLogs
+      }
+
+      let presentation = DashboardTimelinePresentation.buildBundle(
+        items: selectedTimelineItems,
+        includeDeveloperLogs: true
+      )
+      selectedTimelinePresentationWithDeveloperLogs = presentation
+      return presentation
+    }
+
+    if let selectedTimelinePresentation {
+      return selectedTimelinePresentation
+    }
+
+    let presentation = DashboardTimelinePresentation.buildBundle(
+      items: selectedTimelineItems,
+      includeDeveloperLogs: false
+    )
+    selectedTimelinePresentation = presentation
+    return presentation
   }
 
   func updateTypingEvent(_ payload: DashboardRealtimeConversationTypingPayload) {
@@ -171,5 +230,10 @@ final class ConversationStore {
       translatedMessagesByID = [:]
       translatedClarification = nil
     }
+  }
+
+  private func invalidateTimelinePresentation() {
+    selectedTimelinePresentation = nil
+    selectedTimelinePresentationWithDeveloperLogs = nil
   }
 }

@@ -8,18 +8,60 @@ final class InboxStore {
   private var inboxPrefetchTask: Task<Void, Never>?
   private var metadataHydrationTask: Task<Void, Never>?
 
-  var searchText = ""
-  var sortMode: InboxSortMode = .latestActivity
-  var priorityFilter: InboxPriorityFilter = .all
-  var sentimentFilter: InboxSentimentFilter = .all
-  var metadataFilters: [InboxMetadataFilterKey: JSONValue] = [:]
-  var hideEmptyConversations = true
-  var hideSeenConversations = false
-  var conversations: [DashboardConversation] = []
+  var searchText = "" {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var sortMode: InboxSortMode = .latestActivity {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var priorityFilter: InboxPriorityFilter = .all {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var sentimentFilter: InboxSentimentFilter = .all {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var metadataFilters: [InboxMetadataFilterKey: JSONValue] = [:] {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var hideEmptyConversations = true {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var hideSeenConversations = false {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var conversations: [DashboardConversation] = [] {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
   var nextCursor: String?
   var loadedPageCount = 0
   var isLoadingMore = false
-  var visitorSearchIndex: [String: String] = [:]
+  var visitorSearchIndex: [String: String] = [:] {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  private var manuallyUnreadConversationIDs: Set<String> = []
+  private(set) var filteredConversations: [DashboardConversation] = []
+  private(set) var availableMetadataFilters: [InboxMetadataFilterSection] = []
+  private var shownConversationsByScope: [InboxScope: [DashboardConversation]] = [:]
+  private var shownConversationCountsByScope: [InboxScope: Int] = [:]
+  private var totalConversationCountsByScope: [InboxScope: Int] = [:]
 
   func setConfiguration(_ configuration: DashboardConfiguration?) {
     self.configuration = configuration
@@ -50,37 +92,11 @@ final class InboxStore {
     visitorSearchIndex = [:]
   }
 
-  var filteredConversations: [DashboardConversation] {
-    guard !searchText.isEmpty else { return conversations }
-
-    let query = searchText.localizedLowercase
-    return conversations.filter { conversation in
-      conversationSearchText(for: conversation).localizedLowercase.contains(query)
-    }
-  }
-
   var hasActiveConversationFilters: Bool {
     priorityFilter != .all
       || sentimentFilter != .all
       || !metadataFilters.isEmpty
       || hideSeenConversations
-  }
-
-  var availableMetadataFilters: [InboxMetadataFilterSection] {
-    InboxMetadataFilterKey.allCases.compactMap { key in
-      let options = conversations
-        .compactMap { $0.metadata?[key.rawValue] }
-        .reduce(into: Set<JSONValue>()) { result, value in
-          result.insert(value)
-        }
-        .sorted {
-          $0.dashboardDisplayText.localizedCaseInsensitiveCompare($1.dashboardDisplayText) == .orderedAscending
-        }
-        .map { InboxMetadataFilterOption(key: key, value: $0) }
-
-      guard !options.isEmpty else { return nil }
-      return InboxMetadataFilterSection(key: key, options: options)
-    }
   }
 
   var canLoadMore: Bool {
@@ -107,18 +123,22 @@ final class InboxStore {
     hideSeenConversations = false
   }
 
-  func conversations(
-    in scope: InboxScope,
-    isUnread: (DashboardConversation) -> Bool
-  ) -> [DashboardConversation] {
-    sortConversations(inboxScopedConversations(in: scope, applySearch: true, isUnread: isUnread))
+  func setManuallyUnreadConversationIDs(_ conversationIDs: Set<String>) {
+    guard manuallyUnreadConversationIDs != conversationIDs else { return }
+    manuallyUnreadConversationIDs = conversationIDs
+    rebuildDerivedState()
   }
 
-  func conversationCount(
-    for scope: InboxScope,
-    isUnread: (DashboardConversation) -> Bool
-  ) -> Int {
-    inboxScopedConversations(in: scope, applySearch: false, isUnread: isUnread).count
+  func conversations(in scope: InboxScope) -> [DashboardConversation] {
+    shownConversationsByScope[scope] ?? []
+  }
+
+  func shownConversationCount(for scope: InboxScope) -> Int {
+    shownConversationCountsByScope[scope] ?? 0
+  }
+
+  func conversationCount(for scope: InboxScope) -> Int {
+    totalConversationCountsByScope[scope] ?? 0
   }
 
   func sortConversations(_ scopedConversations: [DashboardConversation]) -> [DashboardConversation] {
@@ -160,17 +180,16 @@ final class InboxStore {
 
   func inboxScopedConversations(
     in scope: InboxScope,
-    applySearch: Bool,
-    isUnread: (DashboardConversation) -> Bool
+    applySearch: Bool
   ) -> [DashboardConversation] {
     let searchableConversations = applySearch ? filteredConversations : conversations
 
     return searchableConversations
-      .filter { conversation($0, isIncludedIn: scope, isUnread: isUnread) }
+      .filter { conversation($0, isIncludedIn: scope) }
       .filter { priorityFilter.includes($0.priority) }
       .filter { sentimentFilter.includes($0.sentimentCategory) }
       .filter { conversationMatchesMetadataFilters($0) }
-      .filter { !hideSeenConversations || isUnread($0) }
+      .filter { !hideSeenConversations || hasUnreadActivity($0) }
       .filter { !hideEmptyConversations || $0.hasContent }
   }
 
@@ -186,24 +205,25 @@ final class InboxStore {
 
   func conversation(
     _ conversation: DashboardConversation,
-    isIncludedIn scope: InboxScope,
-    isUnread: (DashboardConversation) -> Bool
+    isIncludedIn scope: InboxScope
   ) -> Bool {
     switch scope {
     case .all:
-      return true
+      return !conversation.isArchived
     case .unseen:
-      return isUnread(conversation)
+      return !conversation.isArchived && hasUnreadActivity(conversation)
     case .open:
-      return conversation.status == .open
+      return !conversation.isArchived && conversation.status == .open
     case .humanIntervention:
-      return conversation.needsHumanIntervention
+      return !conversation.isArchived && conversation.needsHumanIntervention
     case .clarification:
-      return conversation.needsClarification
+      return !conversation.isArchived && conversation.needsClarification
     case .resolved:
-      return conversation.status == .resolved
+      return !conversation.isArchived && conversation.status == .resolved
     case .spam:
-      return conversation.status == .spam
+      return !conversation.isArchived && conversation.status == .spam
+    case .archived:
+      return conversation.isArchived
     }
   }
 
@@ -313,6 +333,12 @@ final class InboxStore {
         metadata: item.metadata,
         channel: item.channel,
         title: item.title,
+        visitorTitle: item.visitorTitle,
+        visitorTitleLanguage: item.visitorTitleLanguage,
+        visitorLanguage: item.visitorLanguage,
+        titleSource: item.titleSource,
+        translationActivatedAt: item.translationActivatedAt,
+        translationChargedAt: item.translationChargedAt,
         sentiment: item.sentiment,
         sentimentConfidence: item.sentimentConfidence,
         visitorRating: item.visitorRating,
@@ -321,7 +347,6 @@ final class InboxStore {
         deletedAt: item.deletedAt,
         lastMessageAt: item.lastMessageAt ?? existing.lastMessageAt,
         lastSeenAt: item.lastSeenAt ?? existing.lastSeenAt,
-        teamLastSeenAt: item.teamLastSeenAt ?? existing.teamLastSeenAt,
         escalatedAt: item.escalatedAt,
         escalationHandledAt: item.escalationHandledAt,
         aiPausedUntil: item.aiPausedUntil,
@@ -369,6 +394,12 @@ final class InboxStore {
       metadata: existing.metadata,
       channel: existing.channel,
       title: payload.updates.title ?? existing.title,
+      visitorTitle: payload.updates.visitorTitle ?? existing.visitorTitle,
+      visitorTitleLanguage: payload.updates.visitorTitleLanguage ?? existing.visitorTitleLanguage,
+      visitorLanguage: payload.updates.visitorLanguage ?? existing.visitorLanguage,
+      titleSource: existing.titleSource,
+      translationActivatedAt: payload.updates.translationActivatedAt ?? existing.translationActivatedAt,
+      translationChargedAt: payload.updates.translationChargedAt ?? existing.translationChargedAt,
       sentiment: payload.updates.sentiment ?? existing.sentiment,
       sentimentConfidence: payload.updates.sentimentConfidence ?? existing.sentimentConfidence,
       visitorRating: existing.visitorRating,
@@ -377,7 +408,6 @@ final class InboxStore {
       deletedAt: existing.deletedAt,
       lastMessageAt: existing.lastMessageAt,
       lastSeenAt: existing.lastSeenAt,
-      teamLastSeenAt: existing.teamLastSeenAt,
       escalatedAt: payload.updates.escalatedAt ?? existing.escalatedAt,
       escalationHandledAt: payload.updates.escalationHandledAt ?? existing.escalationHandledAt,
       aiPausedUntil: payload.updates.aiPausedUntil ?? existing.aiPausedUntil,
@@ -398,11 +428,6 @@ final class InboxStore {
       return false
     }
 
-    if updatedConversation.deletedAt != nil {
-      conversations.remove(at: index)
-      return true
-    }
-
     let existing = conversations[index]
     conversations[index] = DashboardConversation(
       id: updatedConversation.id,
@@ -415,6 +440,12 @@ final class InboxStore {
       metadata: updatedConversation.metadata,
       channel: updatedConversation.channel,
       title: updatedConversation.title,
+      visitorTitle: updatedConversation.visitorTitle,
+      visitorTitleLanguage: updatedConversation.visitorTitleLanguage,
+      visitorLanguage: updatedConversation.visitorLanguage,
+      titleSource: updatedConversation.titleSource,
+      translationActivatedAt: updatedConversation.translationActivatedAt,
+      translationChargedAt: updatedConversation.translationChargedAt,
       sentiment: updatedConversation.sentiment,
       sentimentConfidence: updatedConversation.sentimentConfidence,
       visitorRating: updatedConversation.visitorRating,
@@ -427,7 +458,6 @@ final class InboxStore {
       lastSeenAt: preserveExistingLastSeenAt
         ? (updatedConversation.lastSeenAt ?? existing.lastSeenAt)
         : updatedConversation.lastSeenAt,
-      teamLastSeenAt: existing.teamLastSeenAt,
       escalatedAt: updatedConversation.escalatedAt,
       escalationHandledAt: updatedConversation.escalationHandledAt,
       aiPausedUntil: updatedConversation.aiPausedUntil,
@@ -451,37 +481,6 @@ final class InboxStore {
     conversations[index] = conversations[index].withLastSeenAt(lastSeenAt)
   }
 
-  func setConversationTeamLastSeenAt(
-    conversationID: String,
-    lastSeenAt: String?
-  ) {
-    guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else {
-      return
-    }
-
-    conversations[index] = conversations[index].withTeamLastSeenAt(lastSeenAt)
-  }
-
-  func updateConversationTeamLastSeenAt(
-    conversationID: String,
-    candidateLastSeenAt: String
-  ) {
-    guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else {
-      return
-    }
-
-    let existing = conversations[index]
-    guard let candidateDate = DashboardTimestampParser.date(from: candidateLastSeenAt) else {
-      return
-    }
-
-    if let existingDate = existing.teamLastSeenAtDate, existingDate >= candidateDate {
-      return
-    }
-
-    conversations[index] = existing.withTeamLastSeenAt(candidateLastSeenAt)
-  }
-
   func cacheSearchVisitor(_ visitor: DashboardVisitor?) {
     guard let visitor else { return }
 
@@ -499,6 +498,64 @@ final class InboxStore {
     var updatedIndex = visitorSearchIndex
     updatedIndex[visitor.id] = searchableText
     visitorSearchIndex = updatedIndex
+  }
+
+  private func rebuildDerivedState() {
+    filteredConversations = buildFilteredConversations()
+    availableMetadataFilters = buildAvailableMetadataFilters()
+
+    var shownConversationsByScope: [InboxScope: [DashboardConversation]] = [:]
+    var shownConversationCountsByScope: [InboxScope: Int] = [:]
+    var totalConversationCountsByScope: [InboxScope: Int] = [:]
+
+    for scope in InboxScope.allCases {
+      let visibleConversations = sortConversations(
+        inboxScopedConversations(
+          in: scope,
+          applySearch: true
+        )
+      )
+      shownConversationsByScope[scope] = visibleConversations
+      shownConversationCountsByScope[scope] = visibleConversations.count
+      totalConversationCountsByScope[scope] = inboxScopedConversations(
+        in: scope,
+        applySearch: false
+      ).count
+    }
+
+    self.shownConversationsByScope = shownConversationsByScope
+    self.shownConversationCountsByScope = shownConversationCountsByScope
+    self.totalConversationCountsByScope = totalConversationCountsByScope
+  }
+
+  private func buildFilteredConversations() -> [DashboardConversation] {
+    guard !searchText.isEmpty else { return conversations }
+
+    let query = searchText.localizedLowercase
+    return conversations.filter { conversation in
+      conversationSearchText(for: conversation).localizedLowercase.contains(query)
+    }
+  }
+
+  private func buildAvailableMetadataFilters() -> [InboxMetadataFilterSection] {
+    InboxMetadataFilterKey.allCases.compactMap { key in
+      let options = conversations
+        .compactMap { $0.metadata?[key.rawValue] }
+        .reduce(into: Set<JSONValue>()) { result, value in
+          result.insert(value)
+        }
+        .sorted {
+          $0.dashboardDisplayText.localizedCaseInsensitiveCompare($1.dashboardDisplayText) == .orderedAscending
+        }
+        .map { InboxMetadataFilterOption(key: key, value: $0) }
+
+      guard !options.isEmpty else { return nil }
+      return InboxMetadataFilterSection(key: key, options: options)
+    }
+  }
+
+  private func hasUnreadActivity(_ conversation: DashboardConversation) -> Bool {
+    manuallyUnreadConversationIDs.contains(conversation.id) || conversation.hasUnreadActivity
   }
 
   private func loadInboxPages(

@@ -14,6 +14,8 @@ struct TimelineMessageGroupView: View {
   }
 
   var body: some View {
+    let lastItemID = group.items.last?.id
+
     HStack(alignment: .bottom, spacing: 12) {
       if alignsTrailing {
         Spacer(minLength: ConversationTimelineLayout.sideSpacer)
@@ -33,14 +35,14 @@ struct TimelineMessageGroupView: View {
           .font(.caption)
           .foregroundStyle(.secondary)
 
-        ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
+        ForEach(group.items) { item in
           TimelineMessageBubbleView(
             item: item,
             sender: sender,
             translatedMessage: translatedMessagesByID[item.id],
             isTrailing: alignsTrailing,
-            isLastInGroup: index == group.items.count - 1,
-            seenReceipts: index == group.items.count - 1 ? seenReceipts : []
+            isLastInGroup: item.id == lastItemID,
+            seenReceipts: item.id == lastItemID ? seenReceipts : []
           )
         }
       }

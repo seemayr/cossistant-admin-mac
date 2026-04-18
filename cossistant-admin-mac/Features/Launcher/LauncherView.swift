@@ -79,13 +79,9 @@ struct LauncherView: View {
               }
             )
             .tag(profile.id)
-            .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10))
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
           }
         }
         .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

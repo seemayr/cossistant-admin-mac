@@ -3,6 +3,8 @@ import SFSafeSymbols
 import CossistantAdmin
 
 struct ConversationDetailView: View {
+  @Binding var composerDraftText: String
+  @Binding var composerVisibility: DashboardTimelineItemVisibility
   let website: DashboardWebsite?
   let conversation: DashboardConversation?
   let listSnapshotConversation: DashboardConversation?
@@ -21,11 +23,14 @@ struct ConversationDetailView: View {
   let translatedMessagesByID: [String: DashboardMessageTranslation]
   let translatedClarification: DashboardMessageTranslation?
   let loadState: ConversationSelectionLoadState
+  let timelinePresentation: DashboardTimelinePresentationBundle?
 
   var body: some View {
     Group {
       if let conversation {
         ConversationWorkspaceView(
+          composerDraftText: $composerDraftText,
+          composerVisibility: $composerVisibility,
           website: website,
           conversation: conversation,
           listSnapshotConversation: listSnapshotConversation,
@@ -43,7 +48,8 @@ struct ConversationDetailView: View {
           seenDebugState: seenDebugState,
           translatedMessagesByID: translatedMessagesByID,
           translatedClarification: translatedClarification,
-          loadState: loadState
+          loadState: loadState,
+          timelinePresentation: timelinePresentation
         )
       } else {
         ContentUnavailableView(

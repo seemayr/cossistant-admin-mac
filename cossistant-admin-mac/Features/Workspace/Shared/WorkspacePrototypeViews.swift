@@ -6,18 +6,18 @@ struct PrototypeInfoCard<Content: View>: View {
   @ViewBuilder let content: Content
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
+    VStack(alignment: .leading, spacing: 12) {
       Text(title)
-        .font(.headline)
+        .font(.headline.weight(.semibold))
 
       content
     }
-    .padding(18)
+    .padding(16)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.background, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     .overlay {
-      RoundedRectangle(cornerRadius: 20, style: .continuous)
-        .strokeBorder(.quaternary, lineWidth: 1)
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .strokeBorder(.separator.opacity(0.2), lineWidth: 1)
     }
   }
 }
@@ -27,13 +27,14 @@ struct PrototypeFact: View {
   let value: String
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
+    LabeledContent {
+      Text(value)
+        .font(.body)
+        .multilineTextAlignment(.trailing)
+    } label: {
       Text(label)
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
-
-      Text(value)
-        .font(.body)
     }
   }
 }

@@ -10,7 +10,7 @@ struct TimelineImageStripView: View {
   var body: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 8) {
-        ForEach(Array(images.enumerated()), id: \.offset) { _, image in
+        ForEach(images, id: \.url) { image in
           TimelineImageThumbnailButton(image: image) {
             selectedImage = TimelineImagePreviewItem(image: image)
           }
@@ -28,7 +28,7 @@ struct TimelineFileStripView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      ForEach(Array(files.enumerated()), id: \.offset) { _, file in
+      ForEach(files, id: \.url) { file in
         TimelineFileAttachmentCard(file: file)
       }
     }

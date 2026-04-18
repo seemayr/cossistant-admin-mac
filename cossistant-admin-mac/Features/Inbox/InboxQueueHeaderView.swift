@@ -3,17 +3,16 @@ import SFSafeSymbols
 import CossistantAdmin
 
 struct InboxQueueHeaderView: View {
-  @Bindable var model: WorkspaceModel
   @Bindable var store: InboxStore
   let scope: InboxScope
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       Text(scope.title)
-        .font(.title2.weight(.semibold))
+        .font(.headline.weight(.semibold))
 
       Text(queueSummary)
-        .font(.subheadline)
+        .font(.caption)
         .foregroundStyle(.secondary)
 
       HStack(spacing: 10) {
@@ -98,14 +97,14 @@ struct InboxQueueHeaderView: View {
       .padding(.top, 4)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 18)
-    .padding(.vertical, 16)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 12)
     .background(.bar)
   }
 
   private var queueSummary: String {
-    let shown = model.conversations(in: scope).count
-    let total = model.conversationCount(for: scope)
+    let shown = store.shownConversationCount(for: scope)
+    let total = store.conversationCount(for: scope)
 
     if total == 0 {
       return "No conversations match this queue right now."

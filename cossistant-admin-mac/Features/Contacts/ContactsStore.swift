@@ -5,6 +5,7 @@ import CossistantAdmin
 @Observable @MainActor
 final class ContactsStore {
   private var configuration: DashboardConfiguration?
+  private var queryRefreshTask: Task<Void, Never>?
 
   var items: [DashboardContactListItem] = []
   var selectedContact: DashboardContact?
@@ -12,10 +13,30 @@ final class ContactsStore {
   var page = 1
   var pageSize = 20
   var totalCount = 0
-  var searchText = ""
-  var sortBy: DashboardContactSortBy = .updatedAt
-  var sortOrder: DashboardSortOrder = .desc
-  var visitorStatus: DashboardContactVisitorStatus = .all
+  var searchText = "" {
+    didSet {
+      guard searchText != oldValue else { return }
+      handleQueryInputsChanged(debounce: true)
+    }
+  }
+  var sortBy: DashboardContactSortBy = .updatedAt {
+    didSet {
+      guard sortBy != oldValue else { return }
+      handleQueryInputsChanged()
+    }
+  }
+  var sortOrder: DashboardSortOrder = .desc {
+    didSet {
+      guard sortOrder != oldValue else { return }
+      handleQueryInputsChanged()
+    }
+  }
+  var visitorStatus: DashboardContactVisitorStatus = .all {
+    didSet {
+      guard visitorStatus != oldValue else { return }
+      handleQueryInputsChanged()
+    }
+  }
   var isLoadingList = false
   var isLoadingDetail = false
   var errorMessage: String?
@@ -37,6 +58,7 @@ final class ContactsStore {
   }
 
   func reset() {
+    queryRefreshTask?.cancel()
     items = []
     selectedContact = nil
     selectedContactOrganization = nil
@@ -45,25 +67,28 @@ final class ContactsStore {
     errorMessage = nil
   }
 
-  func refresh() async {
+  func refresh(page requestedPage: Int? = nil) async {
+    let querySignature = currentQuerySignature
     errorMessage = nil
     isLoadingList = true
     defer { isLoadingList = false }
 
     do {
       let response = try await backendClient().contacts.listContacts(
-        page: page,
+        page: requestedPage ?? page,
         limit: pageSize,
         search: searchText.isEmpty ? nil : searchText,
         sortBy: sortBy,
         sortOrder: sortOrder,
         visitorStatus: visitorStatus
       )
+      guard querySignature == currentQuerySignature else { return }
       items = response.items
       page = response.page
       pageSize = response.pageSize
       totalCount = response.totalCount
     } catch {
+      guard querySignature == currentQuerySignature else { return }
       errorMessage = error.localizedDescription
     }
   }
@@ -226,5 +251,34 @@ final class ContactsStore {
     }
 
     return CossistantAdminClient(configuration: configuration)
+  }
+
+  private var currentQuerySignature: String {
+    [
+      searchText,
+      sortBy.rawValue,
+      sortOrder.rawValue,
+      visitorStatus.rawValue,
+      String(pageSize),
+    ].joined(separator: "|")
+  }
+
+  private func handleQueryInputsChanged(debounce: Bool = false) {
+    page = 1
+    scheduleRefresh(debounce: debounce)
+  }
+
+  private func scheduleRefresh(debounce: Bool) {
+    queryRefreshTask?.cancel()
+    guard configuration != nil else { return }
+
+    queryRefreshTask = Task { [weak self] in
+      guard let self else { return }
+      if debounce {
+        try? await Task.sleep(for: .milliseconds(250))
+      }
+      guard !Task.isCancelled else { return }
+      await self.refresh(page: 1)
+    }
   }
 }

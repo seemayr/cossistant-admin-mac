@@ -9,12 +9,12 @@ struct LauncherProfileDetail: View {
   let onDelete: () -> Void
 
   var body: some View {
-    VStack(alignment: .center, spacing: 26) {
-      Spacer(minLength: 56)
+    VStack(alignment: .center, spacing: 22) {
+      Spacer(minLength: 40)
 
       ZStack {
-        RoundedRectangle(cornerRadius: 26, style: .continuous)
-          .fill(.ultraThinMaterial)
+        Circle()
+          .fill(.thinMaterial)
           .frame(width: 104, height: 104)
 
         Image(systemSymbol: .bubbleLeftAndBubbleRightFill)
@@ -24,11 +24,11 @@ struct LauncherProfileDetail: View {
 
       VStack(spacing: 6) {
         Text(profile.name)
-          .font(.system(size: 34, weight: .semibold, design: .rounded))
+          .font(.system(size: 32, weight: .semibold, design: .rounded))
           .multilineTextAlignment(.center)
 
         Text(profile.hostLabel)
-          .font(.title3)
+          .font(.headline)
           .foregroundStyle(.secondary)
       }
 
@@ -79,7 +79,7 @@ struct LauncherWelcomeState: View {
     ContentUnavailableView {
       Label("No Workspace Profiles", systemSymbol: .bubbleLeftAndBubbleRight)
     } description: {
-      Text("Create a profile to start opening workspaces.")
+      Text("Create a profile to open a workspace.")
     } actions: {
       Button {
         onCreateProfile()
@@ -96,7 +96,7 @@ struct LauncherSelectionState: View {
     ContentUnavailableView {
       Label("Select a Profile", systemSymbol: .bubbleLeftAndBubbleRight)
     } description: {
-      Text("Choose a saved profile to open its workspace.")
+      Text("Choose a profile from the sidebar.")
     }
   }
 }

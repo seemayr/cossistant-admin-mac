@@ -30,13 +30,9 @@ struct AIAutoResolveWorkspaceView: View {
   var body: some View {
     HStack(spacing: 0) {
       ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 18) {
           Text("Auto-Resolve")
-            .font(.largeTitle.weight(.semibold))
-
-          Text("Review recent conversations one by one with AI, automatically resolve safe cases, and inspect a running decision list as results come in.")
-            .font(.title3)
-            .foregroundStyle(.secondary)
+            .font(.title.weight(.semibold))
 
           autoResolveControlsCard
 
@@ -73,7 +69,7 @@ struct AIAutoResolveWorkspaceView: View {
       .pickerStyle(.segmented)
       .disabled(store.isRunning)
 
-      Text("Conversations are reviewed conservatively. Empty conversations resolve immediately. Feedback and idea-only threads also resolve, while anything waiting on a person stays open.")
+      Text("Designed for conservative cleanup. Unclear or people-dependent threads stay open.")
         .font(.subheadline)
         .foregroundStyle(.secondary)
 
@@ -106,12 +102,12 @@ struct AIAutoResolveWorkspaceView: View {
   }
 
   private var autoResolveResultsCard: some View {
-    PrototypeInfoCard(title: "Review Results (\(store.results.count))") {
+    PrototypeInfoCard(title: "Results (\(store.results.count))") {
       if store.results.isEmpty {
         ContentUnavailableView(
           "No review results yet",
           systemImage: SFSymbol.sparkles.rawValue,
-          description: Text("Start the workflow to build a per-conversation list of AI resolve decisions.")
+          description: Text("Start the workflow to review recent conversations.")
         )
       } else {
         VStack(alignment: .leading, spacing: 12) {

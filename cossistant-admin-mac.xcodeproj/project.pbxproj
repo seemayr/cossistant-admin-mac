@@ -105,7 +105,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B46A09372F88043B003CF54B /* XCRemoteSwiftPackageReference "SFSafeSymbols" */,
-				B4D747EE2F8E41960002E36A /* XCRemoteSwiftPackageReference "cossistant-admin-swift" */,
+				B4D747EE2F8E41960002E36A /* XCLocalSwiftPackageReference "../cossistant-admin-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B46A08802F877945003CF54B /* Products */;
@@ -349,6 +349,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		B4D747EE2F8E41960002E36A /* XCLocalSwiftPackageReference "../cossistant-admin-swift" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../cossistant-admin-swift";
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		B46A09372F88043B003CF54B /* XCRemoteSwiftPackageReference "SFSafeSymbols" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -356,14 +363,6 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 7.0.0;
-			};
-		};
-		B4D747EE2F8E41960002E36A /* XCRemoteSwiftPackageReference "cossistant-admin-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/seemayr/cossistant-admin-swift";
-			requirement = {
-				branch = main;
-				kind = branch;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -376,7 +375,7 @@
 		};
 		B4D747EF2F8E41960002E36A /* CossistantAdmin */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B4D747EE2F8E41960002E36A /* XCRemoteSwiftPackageReference "cossistant-admin-swift" */;
+			package = B4D747EE2F8E41960002E36A /* XCLocalSwiftPackageReference "../cossistant-admin-swift" */;
 			productName = CossistantAdmin;
 		};
 /* End XCSwiftPackageProductDependency section */

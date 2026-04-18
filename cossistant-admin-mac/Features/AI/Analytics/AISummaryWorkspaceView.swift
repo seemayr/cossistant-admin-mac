@@ -11,13 +11,9 @@ struct AISummaryWorkspaceView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
+      VStack(alignment: .leading, spacing: 18) {
         Text("Summarize")
-          .font(.largeTitle.weight(.semibold))
-
-        Text("Summarize recent support problems across many conversations, then ask follow-up questions against the same AI thread.")
-          .font(.title3)
-          .foregroundStyle(.secondary)
+          .font(.title.weight(.semibold))
 
         analyticsRangeCard
 
@@ -46,7 +42,7 @@ struct AISummaryWorkspaceView: View {
   }
 
   private var analyticsRangeCard: some View {
-    PrototypeInfoCard(title: "Summary Range") {
+    PrototypeInfoCard(title: "Range") {
       Picker("Range", selection: $store.rangeMode) {
         ForEach(AnalyticsSummaryRangeMode.allCases) { mode in
           Text(mode.label)
@@ -58,11 +54,11 @@ struct AISummaryWorkspaceView: View {
       switch store.rangeMode {
       case .lastHours:
         Stepper(value: $store.lastHours, in: 1...168) {
-          Text("Analyze conversations active in the last \(store.lastHours) hour\(store.lastHours == 1 ? "" : "s").")
+          Text("Last \(store.lastHours) hour\(store.lastHours == 1 ? "" : "s")")
         }
       case .lastDays:
         Stepper(value: $store.lastDays, in: 1...90) {
-          Text("Analyze conversations active in the last \(store.lastDays) day\(store.lastDays == 1 ? "" : "s").")
+          Text("Last \(store.lastDays) day\(store.lastDays == 1 ? "" : "s")")
         }
       case .custom:
         VStack(alignment: .leading, spacing: 12) {
@@ -144,12 +140,12 @@ struct AISummaryWorkspaceView: View {
   }
 
   private var analyticsConversationCard: some View {
-    PrototypeInfoCard(title: "AI Conversation") {
+    PrototypeInfoCard(title: "Summary Thread") {
       if store.summaryMessages.isEmpty {
         ContentUnavailableView(
           "No summary yet",
           systemImage: SFSymbol.textBubble.rawValue,
-          description: Text("Pick a time range, generate a summary, and then use follow-up questions to dig into recurring complaints or reported bugs.")
+          description: Text("Generate a summary to start asking follow-up questions.")
         )
       } else {
         VStack(alignment: .leading, spacing: 14) {

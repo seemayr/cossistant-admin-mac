@@ -24,5 +24,6 @@ struct WorkspaceSceneView: View {
       showConversationInspector: $showConversationInspector
     )
       .toolbar(removing: .title)
+      .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
   }
 }

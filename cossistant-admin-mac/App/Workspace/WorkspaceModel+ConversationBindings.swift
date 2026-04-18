@@ -32,6 +32,12 @@ extension WorkspaceModel {
     set { conversationStore.selectedTimelineItems = newValue }
   }
 
+  func selectedTimelinePresentation(
+    includeDeveloperLogs: Bool
+  ) -> DashboardTimelinePresentationBundle {
+    conversationStore.timelinePresentation(includeDeveloperLogs: includeDeveloperLogs)
+  }
+
   var selectedTimelineNextCursor: String? {
     get { conversationStore.selectedTimelineNextCursor }
     set { conversationStore.selectedTimelineNextCursor = newValue }
@@ -40,6 +46,16 @@ extension WorkspaceModel {
   var showMessageTranslations: Bool {
     get { conversationStore.showTranslations }
     set { conversationStore.showTranslations = newValue }
+  }
+
+  var conversationComposerDraftText: String {
+    get { conversationStore.composerDraftText }
+    set { conversationStore.composerDraftText = newValue }
+  }
+
+  var conversationComposerVisibility: DashboardTimelineItemVisibility {
+    get { conversationStore.composerVisibility }
+    set { conversationStore.composerVisibility = newValue }
   }
 
   var selectedConversationLoadState: ConversationSelectionLoadState {

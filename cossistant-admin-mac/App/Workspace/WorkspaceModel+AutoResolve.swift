@@ -5,8 +5,7 @@ import CossistantAdmin
 extension WorkspaceModel {
   func inspectAutoResolveConversation(_ conversationID: DashboardConversation.ID) async {
     autoResolveStore.inspectedConversationID = conversationID
-    selectedConversationID = conversationID
-    await loadSelectedConversation(force: false, showsLoadingState: true)
+    selectConversation(conversationID)
   }
 
   func startAutoResolve() {
@@ -68,7 +67,6 @@ extension WorkspaceModel {
 
       let optimisticSeenAt = ISO8601DateFormatter.internetDateTime.string(from: .now)
       setConversationLastSeenAt(conversationID: conversationID, lastSeenAt: optimisticSeenAt)
-      setConversationTeamLastSeenAt(conversationID: conversationID, lastSeenAt: optimisticSeenAt)
 
       let updatedConversation = try await backendClient.conversations.markConversationRead(
         conversationID: conversationID

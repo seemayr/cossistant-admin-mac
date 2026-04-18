@@ -21,24 +21,13 @@ struct ConversationTimelineView: View {
   let canLoadMoreTimeline: Bool
   let isLoadingMoreTimeline: Bool
   let onLoadMoreTimeline: () -> Void
+  let presentation: DashboardTimelinePresentationBundle?
 
-  private var renderables: [DashboardTimelineRenderable] {
-    DashboardTimelinePresentation.build(
+  private var timelinePresentation: DashboardTimelinePresentationBundle {
+    presentation ?? DashboardTimelinePresentation.buildBundle(
       items: items,
       includeDeveloperLogs: showDeveloperLogs
     )
-  }
-
-  private var latestSeenEligibleItemID: String? {
-    items
-      .sorted { ($0.createdAtDate ?? .distantPast) < ($1.createdAtDate ?? .distantPast) }
-      .last {
-        $0.type == .message
-          && $0.visibility == .public
-          && !$0.isPrivateNote
-          && ($0.userId != nil || $0.aiAgentId != nil)
-      }?
-      .id
   }
 
   private var seenReceipts: [TimelineSeenReceiptDisplay] {
@@ -54,8 +43,8 @@ struct ConversationTimelineView: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 18) {
-      ForEach(renderables) { renderable in
+    LazyVStack(alignment: .leading, spacing: 18) {
+      ForEach(timelinePresentation.renderables) { renderable in
         switch renderable {
         case .day(let marker):
           TimelineDaySeparatorView(date: marker.date)
@@ -87,7 +76,7 @@ struct ConversationTimelineView: View {
         group: group,
         sender: senderDisplay(for: group.sender),
         translatedMessagesByID: translatedMessagesByID,
-        seenReceipts: group.items.last?.id == latestSeenEligibleItemID ? seenReceipts : []
+        seenReceipts: group.items.last?.id == timelinePresentation.latestSeenEligibleItemID ? seenReceipts : []
       )
     case .publicActivity:
       TimelineActivityGroupView(

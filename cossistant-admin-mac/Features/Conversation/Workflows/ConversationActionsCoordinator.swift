@@ -16,7 +16,6 @@ final class ConversationActionsCoordinator {
   private let sendRealtimeTyping: (DashboardConversation.ID, Bool, String?) async -> Void
   private let setManualUnread: (DashboardConversation.ID, Bool) -> Void
   private let setConversationLastSeenAt: (DashboardConversation.ID, String?) -> Void
-  private let setConversationTeamLastSeenAt: (DashboardConversation.ID, String?) -> Void
   private let syncConversationSeenState: (DashboardConversation.ID, [DashboardConversationSeen], String?) -> Void
 
   init(
@@ -33,7 +32,6 @@ final class ConversationActionsCoordinator {
     sendRealtimeTyping: @escaping (DashboardConversation.ID, Bool, String?) async -> Void,
     setManualUnread: @escaping (DashboardConversation.ID, Bool) -> Void,
     setConversationLastSeenAt: @escaping (DashboardConversation.ID, String?) -> Void,
-    setConversationTeamLastSeenAt: @escaping (DashboardConversation.ID, String?) -> Void,
     syncConversationSeenState: @escaping (DashboardConversation.ID, [DashboardConversationSeen], String?) -> Void
   ) {
     self.backendClient = backendClient
@@ -49,7 +47,6 @@ final class ConversationActionsCoordinator {
     self.sendRealtimeTyping = sendRealtimeTyping
     self.setManualUnread = setManualUnread
     self.setConversationLastSeenAt = setConversationLastSeenAt
-    self.setConversationTeamLastSeenAt = setConversationTeamLastSeenAt
     self.syncConversationSeenState = syncConversationSeenState
   }
 
@@ -108,7 +105,6 @@ final class ConversationActionsCoordinator {
       setManualUnread(conversationID, false)
       let optimisticSeenAt = ISO8601DateFormatter.internetDateTime.string(from: .now)
       setConversationLastSeenAt(conversationID, optimisticSeenAt)
-      setConversationTeamLastSeenAt(conversationID, optimisticSeenAt)
 
       let updatedConversation = try await backendClient.conversations.markConversationRead(
         conversationID: conversationID

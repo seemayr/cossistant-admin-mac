@@ -6,6 +6,7 @@ struct WorkspaceRootView: View {
   @Bindable var model: WorkspaceModel
   @Bindable var workspaceStore: WorkspaceStore
   @Binding var showConversationInspector: Bool
+  @State private var splitViewVisibility: NavigationSplitViewVisibility = .all
   @Environment(\.openWindow) private var openWindow
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.controlActiveState) private var controlActiveState
@@ -18,7 +19,7 @@ struct WorkspaceRootView: View {
     switch activeRoute {
     case .statistics, .aiSummarize, .aiAutoResolve, .faq:
       true
-    case .inbox, .contacts, .knowledge:
+    case .inbox, .contacts, .knowledge, .aiAgents:
       false
     }
   }
@@ -34,61 +35,22 @@ struct WorkspaceRootView: View {
           openWindow(id: "launcher")
         }
       } else {
-        if usesDetailOnlySplitLayout {
-          NavigationSplitView {
-            sidebarColumn
-          } detail: {
-            detailColumn
-          }
-          .navigationSplitViewStyle(.prominentDetail)
-        } else {
-          NavigationSplitView {
-            sidebarColumn
-          } content: {
-            contentColumn
-          } detail: {
-            detailColumn
-          }
-          .navigationSplitViewStyle(.prominentDetail)
+        NavigationSplitView(columnVisibility: $splitViewVisibility) {
+          sidebarColumn
+        } content: {
+          contentColumn
+        } detail: {
+          detailColumn
         }
+        .navigationSplitViewStyle(.prominentDetail)
       }
     }
     .task {
       await model.restoreSessionIfNeeded()
+      syncSplitViewVisibility()
     }
-    .task(id: activeRoute) {
-      switch activeRoute {
-      case .inbox:
-        break
-      case .statistics:
-        break
-      case .contacts:
-        guard model.contactsStore.items.isEmpty, !model.contactsStore.isLoadingList else {
-          return
-        }
-        await model.contactsStore.refresh()
-      case .knowledge:
-        guard model.knowledgeStore.items.isEmpty, !model.knowledgeStore.isLoadingList else {
-          return
-        }
-        await model.knowledgeStore.refresh()
-      case .faq:
-        break
-      case .aiSummarize:
-        break
-      case .aiAutoResolve:
-        break
-      }
-    }
-    .task(id: model.selectedConversationID) {
-      guard case .inbox = activeRoute else { return }
-      guard model.website != nil else { return }
-      guard model.selectedConversationDetail?.id != model.selectedConversationID
-              || model.selectedConversationLoadState == .idle else {
-        return
-      }
-
-      await model.loadSelectedConversation()
+    .onChange(of: activeRoute) { _, _ in
+      syncSplitViewVisibility()
     }
     .task(id: autoSeenTrigger) {
       if DashboardReadDebug.isTargetConversation(autoSeenTrigger.selectedConversationID) {
@@ -110,15 +72,6 @@ struct WorkspaceRootView: View {
       }
 
       await model.markSelectedConversationRead()
-    }
-    .task(id: workspaceStore.selectedContactID) {
-      guard let selectedContactID = workspaceStore.selectedContactID else { return }
-      await model.contactsStore.loadContact(id: selectedContactID)
-    }
-    .task(id: workspaceStore.selectedKnowledgeID) {
-      guard workspaceStore.knowledgeEditorDraft == nil else { return }
-      guard let selectedKnowledgeID = workspaceStore.selectedKnowledgeID else { return }
-      await model.knowledgeStore.loadKnowledge(id: selectedKnowledgeID)
     }
     .task(id: model.inboxStore.searchText) {
       model.handleConversationSearchChange()
@@ -156,7 +109,7 @@ struct WorkspaceRootView: View {
     WorkspaceSidebarView(
       model: model,
       inboxStore: model.inboxStore,
-      selection: $workspaceStore.selectedRoute,
+      selection: routeSelectionBinding,
       onRefresh: {
         Task {
           await refreshCurrentSection()
@@ -174,33 +127,37 @@ struct WorkspaceRootView: View {
         model: model,
         store: model.inboxStore,
         scope: scope,
-        selection: $model.selectedConversationID
+        selection: conversationSelectionBinding
       )
       .navigationSplitViewColumnWidth(min: 280, ideal: 380, max: 460)
     case .contacts:
       ContactsListView(
         store: model.contactsStore,
-        selection: $workspaceStore.selectedContactID
+        selection: contactSelectionBinding
       )
       .navigationSplitViewColumnWidth(min: 260, ideal: 340, max: 420)
     case .knowledge:
       KnowledgeListView(
         store: model.knowledgeStore,
-        selection: $workspaceStore.selectedKnowledgeID,
+        availableAIAgents: model.website?.availableAIAgents ?? [],
+        selection: knowledgeSelectionBinding,
         onCreate: { type in
-          workspaceStore.selectedKnowledgeID = nil
-          model.knowledgeStore.selectedKnowledge = nil
-          workspaceStore.knowledgeEditorDraft = .blank(type: type)
+          model.startCreatingKnowledge(type, in: workspaceStore)
         },
         onEdit: { item in
-          workspaceStore.selectedKnowledgeID = item.id
-          workspaceStore.knowledgeEditorDraft = DashboardKnowledgeEditorDraft(item: item)
+          model.startEditingKnowledge(item, in: workspaceStore)
         },
         onDelete: { item in
           await deleteKnowledge(item)
         }
       )
       .navigationSplitViewColumnWidth(min: 260, ideal: 340, max: 420)
+    case .aiAgents:
+      AIAgentListView(
+        agents: model.website?.availableAIAgents ?? [],
+        selection: aiAgentSelectionBinding
+      )
+      .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 380)
     case .statistics, .aiSummarize, .aiAutoResolve, .faq:
       EmptyView()
     }
@@ -213,6 +170,7 @@ struct WorkspaceRootView: View {
       let conversationControls = ConversationWorkspaceControls(
         showDeveloperLogs: model.showDeveloperLogs,
         canUseMessageTranslations: model.canUseMessageTranslations,
+        canUseConversationDraftTranslation: model.canUseConversationDraftTranslation,
         showTranslations: model.showMessageTranslations,
         isTranslatingMessages: model.isTranslatingMessages,
         translationErrorMessage: model.translationErrorMessage,
@@ -233,14 +191,25 @@ struct WorkspaceRootView: View {
           }
         },
         setShowInspector: { showConversationInspector = $0 },
+        setComposerDraftText: { model.conversationComposerDraftText = $0 },
+        setComposerVisibility: { model.conversationComposerVisibility = $0 },
         sendMessage: { text, visibility, attachments in
           await model.sendMessage(text: text, visibility: visibility, attachments: attachments)
         },
         generateReplyDraft: { draft in
           await model.generateReplyDraft(from: draft)
         },
+        generateReplyFromFAQ: { faq in
+          await model.generateReplyFromFAQ(using: faq)
+        },
+        loadFAQsForConversation: { aiAgentID in
+          try await model.loadFAQEntriesForConversation(aiAgentID: aiAgentID)
+        },
+        previewDraftTranslation: { text in
+          try await model.translateConversationDraftPreview(text)
+        },
         buildFAQFromConversation: {
-          workspaceStore.selectedRoute = .faq
+          setSelectedRoute(.faq)
           model.startFAQBuildFromSelectedConversation()
         },
         copyConversationMessages: {
@@ -330,6 +299,14 @@ struct WorkspaceRootView: View {
       )
 
       ConversationDetailView(
+        composerDraftText: Binding(
+          get: { model.conversationComposerDraftText },
+          set: { model.conversationComposerDraftText = $0 }
+        ),
+        composerVisibility: Binding(
+          get: { model.conversationComposerVisibility },
+          set: { model.conversationComposerVisibility = $0 }
+        ),
         website: model.website,
         conversation: model.selectedConversation,
         listSnapshotConversation: model.selectedConversationListSnapshot,
@@ -347,7 +324,8 @@ struct WorkspaceRootView: View {
         seenDebugState: seenDebugState,
         translatedMessagesByID: model.translatedMessagesByID,
         translatedClarification: model.translatedClarification,
-        loadState: model.selectedConversationLoadState
+        loadState: model.selectedConversationLoadState,
+        timelinePresentation: model.selectedTimelinePresentation(includeDeveloperLogs: model.showDeveloperLogs)
       )
       .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
     case .statistics:
@@ -362,6 +340,8 @@ struct WorkspaceRootView: View {
       KnowledgeDetailView(
         item: model.knowledgeStore.selectedKnowledge,
         draft: $workspaceStore.knowledgeEditorDraft,
+        availableAIAgents: model.website?.availableAIAgents ?? [],
+        isLoading: model.knowledgeStore.isLoadingDetail,
         errorMessage: model.knowledgeStore.errorMessage,
         onSave: { draft in
           await saveKnowledgeDraft(draft)
@@ -370,11 +350,30 @@ struct WorkspaceRootView: View {
           workspaceStore.knowledgeEditorDraft = nil
         },
         onEdit: { item in
-          workspaceStore.knowledgeEditorDraft = DashboardKnowledgeEditorDraft(item: item)
+          model.startEditingKnowledge(item, in: workspaceStore)
+        },
+        onOpenAIAgent: { aiAgentID in
+          setSelectedRoute(.aiAgents)
+          model.selectAIAgent(aiAgentID, in: workspaceStore)
         },
         onDelete: { item in
           await deleteKnowledge(item)
         }
+      )
+    case .aiAgents:
+      AIAgentDetailView(
+        store: model.aiAgentStore,
+        summary: model.website?.availableAIAgents.first(where: { $0.id == workspaceStore.selectedAIAgentID }),
+        onRefresh: {
+          guard let selectedAIAgentID = workspaceStore.selectedAIAgentID else { return }
+          model.selectAIAgent(selectedAIAgentID, in: workspaceStore, force: true)
+        },
+        onStartTraining: {
+          guard let selectedAIAgentID = workspaceStore.selectedAIAgentID else { return }
+          Task {
+            await model.aiAgentStore.startTraining(id: selectedAIAgentID)
+          }
+        },
       )
     case .aiSummarize:
       AISummaryWorkspaceView(
@@ -429,8 +428,7 @@ struct WorkspaceRootView: View {
           await model.inspectAutoResolveConversation(conversationID)
         },
         onOpenConversation: { conversationID in
-          workspaceStore.selectedRoute = .inbox(.all)
-          model.selectedConversationID = conversationID
+          openConversation(conversationID, in: .inbox(.all))
         },
         onResolveAnyway: { conversationID in
           await model.resolveAutoResolveResult(conversationID)
@@ -450,6 +448,7 @@ struct WorkspaceRootView: View {
     case .faq:
       FAQDraftingWorkspaceView(
         store: model.faqStore,
+        availableAIAgents: model.website?.availableAIAgents ?? [],
         selectedConversation: model.selectedConversation,
         canBuildFromConversation: model.faqCanBuildFromConversation,
         onOptimizeDraft: {
@@ -466,28 +465,104 @@ struct WorkspaceRootView: View {
         },
         onApplySuggestionToDraft: {
           model.applyFAQSuggestionToDraft()
+        },
+        onSaveDraftToKnowledge: {
+          _ = await model.saveFAQToKnowledge(
+            usingSuggestion: false,
+            startTraining: false
+          )
+        },
+        onSaveSuggestionToKnowledge: {
+          _ = await model.saveFAQToKnowledge(
+            usingSuggestion: true,
+            startTraining: false
+          )
+        },
+        onSaveAndTrainSuggestion: {
+          _ = await model.saveFAQToKnowledge(
+            usingSuggestion: model.faqStore.suggestion != nil,
+            startTraining: true
+          )
+        },
+        onOpenSavedKnowledge: {
+          guard let savedKnowledgeID = model.faqStore.lastSavedKnowledgeID else { return }
+          setSelectedRoute(.knowledge)
+          model.selectKnowledge(savedKnowledgeID, in: workspaceStore)
         }
       )
     }
   }
 
   private func refreshCurrentSection() async {
-    switch activeRoute {
-    case .inbox:
-      await model.refresh()
-    case .statistics:
-      await model.refresh()
-    case .contacts:
-      await model.contactsStore.refresh()
-    case .knowledge:
-      await model.knowledgeStore.refresh()
-    case .faq:
-      break
-    case .aiSummarize:
-      break
-    case .aiAutoResolve:
-      break
+    await model.refreshRoute(activeRoute, in: workspaceStore)
+  }
+
+  private var routeSelectionBinding: Binding<WorkspaceRoute?> {
+    Binding(
+      get: { workspaceStore.selectedRoute },
+      set: { newValue in
+        setSelectedRoute(newValue)
+      }
+    )
+  }
+
+  private var conversationSelectionBinding: Binding<DashboardConversation.ID?> {
+    Binding(
+      get: { model.selectedConversationID },
+      set: { newValue in
+        model.selectConversation(newValue)
+      }
+    )
+  }
+
+  private var contactSelectionBinding: Binding<String?> {
+    Binding(
+      get: { workspaceStore.selectedContactID },
+      set: { newValue in
+        model.selectContact(newValue, in: workspaceStore)
+      }
+    )
+  }
+
+  private var knowledgeSelectionBinding: Binding<String?> {
+    Binding(
+      get: { workspaceStore.selectedKnowledgeID },
+      set: { newValue in
+        model.selectKnowledge(newValue, in: workspaceStore)
+      }
+    )
+  }
+
+  private var aiAgentSelectionBinding: Binding<String?> {
+    Binding(
+      get: { workspaceStore.selectedAIAgentID },
+      set: { newValue in
+        model.selectAIAgent(newValue, in: workspaceStore)
+      }
+    )
+  }
+
+  private func setSelectedRoute(_ route: WorkspaceRoute?) {
+    workspaceStore.selectedRoute = route
+
+    guard let route else { return }
+    Task {
+      await model.activateRoute(route, in: workspaceStore)
     }
+  }
+
+  private func openConversation(
+    _ conversationID: DashboardConversation.ID,
+    in route: WorkspaceRoute? = nil
+  ) {
+    if let route {
+      setSelectedRoute(route)
+    }
+    model.selectConversation(conversationID)
+  }
+
+  private func syncSplitViewVisibility() {
+    splitViewVisibility = usesDetailOnlySplitLayout ? .doubleColumn : .all
   }
 
   private var autoSeenTrigger: AutoSeenTrigger {
@@ -510,12 +585,10 @@ struct WorkspaceRootView: View {
 
       if let id = draft.id {
         if let updated = await model.knowledgeStore.updateKnowledge(id: id, draft: request) {
-          workspaceStore.selectedKnowledgeID = updated.id
-          workspaceStore.knowledgeEditorDraft = nil
+          model.presentKnowledge(updated, in: workspaceStore)
         }
       } else if let created = await model.knowledgeStore.createKnowledge(request) {
-        workspaceStore.selectedKnowledgeID = created.id
-        workspaceStore.knowledgeEditorDraft = nil
+        model.presentKnowledge(created, in: workspaceStore)
       }
     } catch {
       model.knowledgeStore.errorMessage = error.localizedDescription
@@ -575,13 +648,7 @@ struct WorkspaceRootView: View {
   }
 
   private func deleteKnowledge(_ item: DashboardKnowledge) async {
-    await model.knowledgeStore.deleteKnowledge(id: item.id)
-    if workspaceStore.selectedKnowledgeID == item.id {
-      workspaceStore.selectedKnowledgeID = nil
-    }
-    if workspaceStore.knowledgeEditorDraft?.id == item.id {
-      workspaceStore.knowledgeEditorDraft = nil
-    }
+    await model.removeKnowledge(item, in: workspaceStore)
   }
 
 }

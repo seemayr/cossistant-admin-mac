@@ -22,10 +22,6 @@ struct WorkspaceSidebarView: View {
                   .font(.subheadline)
                   .foregroundStyle(.secondary)
               }
-
-              Text(model.connectionSummary)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
             }
             .padding(.vertical, 4)
           }
@@ -37,7 +33,7 @@ struct WorkspaceSidebarView: View {
               HStack {
                 Text(scope.title)
                 Spacer()
-                Text(inboxStore.conversationCount(for: scope, isUnread: model.conversationHasUnreadActivity), format: .number)
+                Text(inboxStore.conversationCount(for: scope), format: .number)
                   .foregroundStyle(.secondary)
               }
             } icon: {
@@ -59,6 +55,8 @@ struct WorkspaceSidebarView: View {
         }
 
         Section("AI Tools") {
+          Label("AI Agents", systemSymbol: .sparkles)
+            .tag(WorkspaceRoute.aiAgents)
           Label("Summarize", systemSymbol: .chartXyaxisLine)
             .tag(WorkspaceRoute.aiSummarize)
           Label("Auto-Resolve", systemSymbol: .sparkles)
@@ -85,82 +83,79 @@ private struct WorkspaceSidebarFooter: View {
   let onDismissError: () -> Void
 
   var body: some View {
-    VStack(spacing: 0) {
+    VStack(alignment: .leading, spacing: compactMessage == nil ? 0 : 6) {
       Divider()
 
-      VStack(alignment: .leading, spacing: 10) {
-        HStack(alignment: .center, spacing: 10) {
-          Image(systemSymbol: symbol)
-            .foregroundStyle(tint)
+      HStack(spacing: 10) {
+        Label(title, systemSymbol: symbol)
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(tint)
 
-          Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+        Spacer(minLength: 8)
 
-          Spacer(minLength: 8)
+        Button {
+          onRefresh()
+        } label: {
+          Image(systemSymbol: .arrowClockwise)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help("Refresh")
 
+        if errorMessage != nil {
           Button {
-            onRefresh()
+            onDismissError()
           } label: {
-            Image(systemSymbol: .arrowClockwise)
+            Image(systemSymbol: .xmark)
           }
           .buttonStyle(.plain)
           .foregroundStyle(.secondary)
-          .help("Refresh")
-
-          if errorMessage != nil {
-            Button {
-              onDismissError()
-            } label: {
-              Image(systemSymbol: .xmark)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Dismiss error")
-          }
+          .help("Dismiss error")
         }
+      }
 
-        Text(message)
+      if let compactMessage {
+        Text(compactMessage)
           .font(.caption)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.horizontal, 14)
-      .padding(.vertical, 12)
-      .background(.bar)
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, 14)
+    .padding(.vertical, 10)
+    .background(.regularMaterial)
   }
 
   private var title: String {
     if errorMessage != nil {
-      return "Workspace Error"
+      return "Workspace Issue"
     }
 
     switch realtimeConnectionState {
     case .connected:
-      return "Realtime Connected"
+      return "Realtime Active"
     case .connecting:
-      return "Connecting Realtime"
+      return "Connecting"
     case .disconnected:
-      return "Polling Fallback"
+      return "Using Polling"
     case .failed:
-      return "Realtime Blocked"
+      return "Realtime Unavailable"
     }
   }
 
-  private var message: String {
+  private var compactMessage: String? {
     if let errorMessage, !errorMessage.isEmpty {
       return errorMessage
     }
 
     switch realtimeConnectionState {
     case .connected:
-      return "Live updates are active for the workspace."
+      return nil
     case .connecting:
-      return "The workspace is usable while the realtime connection comes up."
+      return nil
     case .disconnected:
-      return "Realtime is unavailable right now, so the app is refreshing with polling."
+      return nil
     case .failed(let message):
       return message
     }

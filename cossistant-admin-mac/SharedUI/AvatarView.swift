@@ -51,21 +51,30 @@ struct AvatarView: View {
     }
   }
 
+  @ViewBuilder
   private var fallbackAvatar: some View {
     if role == .ai {
-      return AnyView(aiFallbackAvatar)
+      aiFallbackAvatar
+    } else {
+      personFallbackAvatar
     }
+  }
 
-    let accent = Self.palette[DashboardIdentity.stableHash(seed) % Self.palette.count]
+  private var personFallbackAvatar: some View {
+    let descriptor = DashboardIdentity.avatarFallback(seed: seed)
+    let fillColor = Color(
+      hue: descriptor.hue,
+      saturation: descriptor.saturation,
+      brightness: descriptor.brightness
+    )
 
-    return AnyView(ZStack {
+    return ZStack {
       Circle()
-        .fill(accent.opacity(0.18))
+        .fill(fillColor.gradient)
 
-      Text(DashboardIdentity.initials(for: name))
-        .font(.system(size: max(size * 0.34, 12), weight: .semibold, design: .rounded))
-        .foregroundStyle(accent)
-    })
+      Text(descriptor.emoji)
+        .font(.system(size: max(size * 0.5, 14)))
+    }
   }
 
   private var aiFallbackAvatar: some View {
@@ -80,10 +89,6 @@ struct AvatarView: View {
           .foregroundStyle(.secondary)
       }
   }
-
-  private static let palette: [Color] = [
-    .blue, .indigo, .teal, .cyan, .green, .mint, .orange, .pink,
-  ]
 }
 
 struct AvatarPreviewButton: View {

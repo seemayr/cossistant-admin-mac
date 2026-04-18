@@ -70,6 +70,35 @@ final class ConversationExportCoordinator {
     }
   }
 
+  func generateReplyFromFAQ(
+    using faq: DashboardKnowledge
+  ) async -> String? {
+    guard canUseOpenAI else {
+      store.replyDraftErrorMessage = "Add an OpenAI API key in settings to generate FAQ-based replies."
+      return nil
+    }
+
+    store.isGeneratingReplyDraft = true
+    store.replyDraftErrorMessage = nil
+    defer { store.isGeneratingReplyDraft = false }
+
+    do {
+      let transcript = try await buildSelectedConversationMessagesExport()
+      let client = OpenAIReplyDraftClient(apiKey: openAIAPIKey)
+      return try await client.generateFAQReply(
+        transcript: transcript,
+        faq: faq,
+        conversationTitle: selectedConversation()?.displayTitle,
+        websiteName: workspaceName,
+        visitorLanguage: selectedConversation()?.visitorLanguage ?? selectedConversationDetailLanguage,
+        visitorTitleLanguage: selectedConversation()?.visitorTitleLanguage
+      )
+    } catch {
+      store.replyDraftErrorMessage = error.localizedDescription
+      return nil
+    }
+  }
+
   func buildSelectedConversationMessagesMarkdown() async throws -> String {
     guard let conversation = selectedConversation() else {
       throw ConversationAssistantError.noConversationSelected
@@ -264,5 +293,9 @@ final class ConversationExportCoordinator {
       $0.filename?.nilIfEmpty ?? $0.url.nilIfEmpty ?? "file"
     })
     return labels
+  }
+
+  private var selectedConversationDetailLanguage: String? {
+    selectedConversation()?.visitorLanguage
   }
 }

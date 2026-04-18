@@ -25,6 +25,12 @@ extension WorkspaceModel {
 
   var canUseMessageTranslations: Bool {
     globalSettings.hasGoogleCloudTranslateAPIKey
+      || selectedConversation?.translationActivatedAt != nil
+      || selectedTimelineItems.contains { hasStoredTeamTranslation(for: $0) }
+  }
+
+  var canUseConversationDraftTranslation: Bool {
+    globalSettings.hasGoogleCloudTranslateAPIKey
   }
 
   var canUseOpenAIReplyDrafts: Bool {

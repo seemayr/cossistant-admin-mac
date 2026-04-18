@@ -70,6 +70,16 @@ struct DashboardTimelineGroup: Identifiable, Hashable, Sendable {
   }
 }
 
+struct DashboardTimelinePresentationBundle: Hashable, Sendable {
+  let renderables: [DashboardTimelineRenderable]
+  let latestSeenEligibleItemID: String?
+
+  static let empty = DashboardTimelinePresentationBundle(
+    renderables: [],
+    latestSeenEligibleItemID: nil
+  )
+}
+
 enum DashboardTimelineRenderable: Identifiable, Hashable, Sendable {
   case day(DashboardTimelineDayMarker)
   case group(DashboardTimelineGroup)
@@ -87,10 +97,10 @@ enum DashboardTimelineRenderable: Identifiable, Hashable, Sendable {
 enum DashboardTimelinePresentation {
   private static let groupWindow: TimeInterval = 5 * 60
 
-  static func build(
+  static func buildBundle(
     items: [DashboardTimelineItem],
     includeDeveloperLogs: Bool
-  ) -> [DashboardTimelineRenderable] {
+  ) -> DashboardTimelinePresentationBundle {
     let orderedItems = items.sorted {
       ($0.createdAtDate ?? .distantPast) < ($1.createdAtDate ?? .distantPast)
     }
@@ -98,9 +108,14 @@ enum DashboardTimelinePresentation {
     var renderables: [DashboardTimelineRenderable] = []
     var currentGroup: DashboardTimelineGroup?
     var currentDay: Date?
+    var latestSeenEligibleItemID: String?
     let calendar = Calendar.current
 
     for item in orderedItems {
+      if isSeenEligible(item) {
+        latestSeenEligibleItemID = item.id
+      }
+
       guard let itemDate = item.createdAtDate else { continue }
       let itemStyle = style(for: item)
       if itemStyle == .developerLog, !includeDeveloperLogs {
@@ -140,7 +155,10 @@ enum DashboardTimelinePresentation {
       renderables.append(.group(currentGroup))
     }
 
-    return renderables
+    return DashboardTimelinePresentationBundle(
+      renderables: renderables,
+      latestSeenEligibleItemID: latestSeenEligibleItemID
+    )
   }
 
   static func senderDisplay(
@@ -281,5 +299,12 @@ enum DashboardTimelinePresentation {
     case .publicActivity, .developerLog:
       return true
     }
+  }
+
+  private static func isSeenEligible(_ item: DashboardTimelineItem) -> Bool {
+    item.type == .message
+      && item.visibility == .public
+      && !item.isPrivateNote
+      && (item.userId != nil || item.aiAgentId != nil)
   }
 }

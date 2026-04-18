@@ -10,6 +10,7 @@ enum InboxScope: String, CaseIterable, Identifiable, Hashable {
   case clarification
   case resolved
   case spam
+  case archived
 
   var id: String { rawValue }
 
@@ -29,6 +30,8 @@ enum InboxScope: String, CaseIterable, Identifiable, Hashable {
       "Resolved"
     case .spam:
       "Spam"
+    case .archived:
+      "Archived"
     }
   }
 
@@ -48,6 +51,8 @@ enum InboxScope: String, CaseIterable, Identifiable, Hashable {
       "Resolved"
     case .spam:
       "Spam"
+    case .archived:
+      "Archived"
     }
   }
 
@@ -67,6 +72,8 @@ enum InboxScope: String, CaseIterable, Identifiable, Hashable {
       .checkmarkCircle
     case .spam:
       .exclamationmarkShield
+    case .archived:
+      .archivebox
     }
   }
 }
@@ -75,19 +82,21 @@ extension InboxScope {
   func includes(_ conversation: DashboardConversation) -> Bool {
     switch self {
     case .all:
-      true
+      !conversation.isArchived
     case .unseen:
-      conversation.hasUnreadActivity
+      !conversation.isArchived && conversation.hasUnreadActivity
     case .open:
-      conversation.status == .open
+      !conversation.isArchived && conversation.status == .open
     case .humanIntervention:
-      conversation.needsHumanIntervention
+      !conversation.isArchived && conversation.needsHumanIntervention
     case .clarification:
-      conversation.needsClarification
+      !conversation.isArchived && conversation.needsClarification
     case .resolved:
-      conversation.status == .resolved
+      !conversation.isArchived && conversation.status == .resolved
     case .spam:
-      conversation.status == .spam
+      !conversation.isArchived && conversation.status == .spam
+    case .archived:
+      conversation.isArchived
     }
   }
 }
@@ -97,6 +106,7 @@ enum WorkspaceRoute: Hashable {
   case statistics
   case contacts
   case knowledge
+  case aiAgents
   case aiSummarize
   case aiAutoResolve
   case faq
@@ -111,6 +121,8 @@ enum WorkspaceRoute: Hashable {
       "Contacts"
     case .knowledge:
       "Knowledge"
+    case .aiAgents:
+      "AI Agents"
     case .aiSummarize:
       "Summarize"
     case .aiAutoResolve:
@@ -130,6 +142,8 @@ enum WorkspaceRoute: Hashable {
       .person2
     case .knowledge:
       .booksVertical
+    case .aiAgents:
+      .sparkles
     case .aiSummarize:
       .chartXyaxisLine
     case .aiAutoResolve:

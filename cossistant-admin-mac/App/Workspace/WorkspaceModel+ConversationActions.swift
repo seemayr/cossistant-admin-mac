@@ -21,6 +21,76 @@ extension WorkspaceModel {
     )
   }
 
+  func generateReplyFromFAQ(
+    using faq: DashboardKnowledge
+  ) async -> String? {
+    errorMessage = nil
+    return await makeConversationExportCoordinator().generateReplyFromFAQ(using: faq)
+  }
+
+  func loadFAQEntriesForConversation(
+    aiAgentID: String?
+  ) async throws -> [DashboardKnowledge] {
+    let resolvedAIAgentID = aiAgentID?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+      ?? website?.availableAIAgents.first?.id
+
+    let agentFilter = resolvedAIAgentID.map(DashboardKnowledgeAIAgentFilter.specific) ?? .all
+    var page = 1
+    var hasMore = true
+    var collectedItems: [DashboardKnowledge] = []
+
+    while hasMore {
+      let response = try await backendClient.knowledge.listKnowledge(
+        page: page,
+        limit: 100,
+        type: .faq,
+        aiAgentFilter: agentFilter,
+        isIncluded: .included,
+        linkSourceID: nil
+      )
+
+      collectedItems.append(contentsOf: response.items)
+      hasMore = response.pagination.hasMore
+      page += 1
+    }
+
+    var uniqueItems: [DashboardKnowledge] = []
+    var seenIDs = Set<String>()
+
+    for item in collectedItems where item.type == .faq && item.faqPayload != nil {
+      if seenIDs.insert(item.id).inserted {
+        uniqueItems.append(item)
+      }
+    }
+
+    return uniqueItems
+  }
+
+  func translateConversationDraftPreview(
+    _ text: String
+  ) async throws -> DashboardMessageTranslation {
+    let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedText.isEmpty else {
+      throw ConversationAssistantError.server(message: "Write a reply first.")
+    }
+
+    guard globalSettings.hasGoogleCloudTranslateAPIKey else {
+      throw ConversationAssistantError.server(
+        message: "Add a Google Cloud Translate API key in settings to preview translations."
+      )
+    }
+
+    let client = GoogleCloudTranslateClient(apiKey: globalSettings.trimmedGoogleCloudTranslateAPIKey)
+    guard let translation = try await client.translate(
+      texts: [trimmedText],
+      targetLanguageCode: Self.preferredTranslationLanguageCode
+    ).first else {
+      throw ConversationAssistantError.invalidResponse
+    }
+
+    return translation
+  }
+
   func markSelectedConversationRead() async {
     guard let conversationID = selectedConversationID else { return }
     await markConversationRead(conversationID)
@@ -214,5 +284,12 @@ extension WorkspaceModel {
       useCdn: useCdn,
       expiresInSeconds: expiresInSeconds
     )
+  }
+}
+
+private extension String {
+  var nilIfEmpty: String? {
+    let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 }

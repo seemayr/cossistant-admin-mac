@@ -9,16 +9,37 @@ final class FAQStore {
   var hasOpenAIAPIKey = false
   var draft = FAQDraft()
   var suggestion: FAQDraftSuggestion?
+  var selectedAIAgentID: String?
   var statusMessage: String?
   var errorMessage: String?
   var isOptimizing = false
   var isBuildingFromConversation = false
+  var isSavingToKnowledge = false
+  var isStartingTraining = false
+  var lastSavedKnowledgeID: String?
+  var lastSavedKnowledgeTitle: String?
 
   var canOptimize: Bool {
     hasOpenAIAPIKey
       && draft.hasMeaningfulContent
       && !isOptimizing
       && !isBuildingFromConversation
+  }
+
+  var canSaveDraftToKnowledge: Bool {
+    draft.hasMeaningfulContent
+      && !isOptimizing
+      && !isBuildingFromConversation
+      && !isSavingToKnowledge
+      && !isStartingTraining
+  }
+
+  var canSaveSuggestionToKnowledge: Bool {
+    suggestion != nil
+      && !isOptimizing
+      && !isBuildingFromConversation
+      && !isSavingToKnowledge
+      && !isStartingTraining
   }
 
   func clearSuggestion() {
@@ -42,5 +63,8 @@ final class FAQStore {
     if !keepSuggestion {
       suggestion = nil
     }
+    selectedAIAgentID = nil
+    lastSavedKnowledgeID = nil
+    lastSavedKnowledgeTitle = nil
   }
 }

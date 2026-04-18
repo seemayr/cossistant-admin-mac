@@ -7,6 +7,7 @@ final class WorkspaceStore {
   var selectedRoute: WorkspaceRoute? = .inbox(.open)
   var selectedContactID: String?
   var selectedKnowledgeID: String?
+  var selectedAIAgentID: String?
   var knowledgeEditorDraft: DashboardKnowledgeEditorDraft?
   var autoSeenConversationIDInFlight: String?
 

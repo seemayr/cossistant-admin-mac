@@ -29,6 +29,7 @@ struct CossistantAdminMacApp: App {
     Settings {
       GlobalSettingsSceneView()
         .frame(minWidth: 720, minHeight: 320)
+        .containerBackground(.thinMaterial, for: .window)
     }
   }
 }

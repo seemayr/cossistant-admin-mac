@@ -1,8 +1,11 @@
 import SwiftUI
 import CossistantAdmin
 
+private let frontendKnowledgeEditorTypes: [DashboardKnowledgeType] = [.faq, .article]
+
 struct KnowledgeEditorView: View {
   @Binding var draft: DashboardKnowledgeEditorDraft
+  let availableAIAgents: [DashboardWebsite.AIAgent]
   let errorMessage: String?
   let onSave: () -> Void
   let onCancel: () -> Void
@@ -24,7 +27,13 @@ struct KnowledgeEditorView: View {
 
           HStack(spacing: 10) {
             Button("Cancel", action: onCancel)
-            Button("Save", action: onSave)
+            Button("Save") {
+              if draft.type != .url {
+                draft.sourceTitle = ""
+                draft.sourceURL = ""
+              }
+              onSave()
+            }
               .buttonStyle(.borderedProminent)
           }
         }
@@ -40,24 +49,40 @@ struct KnowledgeEditorView: View {
 
         PrototypeInfoCard(title: "Common Fields") {
           Picker("Type", selection: $draft.type) {
-            ForEach(DashboardKnowledgeType.allCases) { type in
+            ForEach(draft.id == nil ? frontendKnowledgeEditorTypes : DashboardKnowledgeType.allCases) { type in
               Text(type.label)
                 .tag(type)
             }
           }
           .disabled(draft.id != nil)
 
-          TextField("Source title", text: $draft.sourceTitle)
-            .textFieldStyle(.roundedBorder)
+          if draft.type == .url {
+            TextField("Source title", text: $draft.sourceTitle)
+              .textFieldStyle(.roundedBorder)
 
-          TextField("Source URL", text: $draft.sourceURL)
-            .textFieldStyle(.roundedBorder)
+            TextField("Source URL", text: $draft.sourceURL)
+              .textFieldStyle(.roundedBorder)
+          }
 
           TextField("Origin", text: $draft.origin)
             .textFieldStyle(.roundedBorder)
 
-          TextField("AI agent ID", text: $draft.aiAgentID)
-            .textFieldStyle(.roundedBorder)
+          Picker(
+            "Knowledge Owner",
+            selection: Binding(
+              get: { draft.aiAgentID.dashboardNilIfEmpty },
+              set: { draft.aiAgentID = $0 ?? "" }
+            )
+          ) {
+            Text("Shared Knowledge")
+              .tag(nil as String?)
+
+            ForEach(availableAIAgents) { agent in
+              Text(agent.displayName)
+                .tag(Optional(agent.id))
+            }
+          }
+          .pickerStyle(.menu)
 
           VStack(alignment: .leading, spacing: 6) {
             Text("Metadata JSON object")
