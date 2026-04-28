@@ -15,6 +15,7 @@ struct ConversationThreadHeaderView: View {
   let onToggleTranslations: (Bool) -> Void
   let isTranslatingMessages: Bool
   let translationErrorMessage: String?
+  let translatedClarification: DashboardMessageTranslation?
   let showInspector: Bool
   let onToggleInspector: (Bool) -> Void
   let isCopyingConversationMessages: Bool
@@ -35,6 +36,7 @@ struct ConversationThreadHeaderView: View {
   let onPauseConversationAI: @MainActor @Sendable (Int) async -> Void
   let onResumeConversationAI: @MainActor @Sendable () async -> Void
   let canUseOpenAIReplyDrafts: Bool
+  let onDismissClarification: @MainActor @Sendable () async -> Void
   let onBuildFAQFromConversation: () -> Void
 
   private static let pauseUntilFurtherNoticeDurationMinutes = 60 * 24 * 365 * 100
@@ -98,11 +100,14 @@ struct ConversationThreadHeaderView: View {
               systemImage: .personFillBadgePlus,
               tint: .orange
             )
-          } else if conversation.needsClarification {
-            WorkspaceMetadataPill(
-              title: "Clarification",
-              systemImage: .questionmarkBubbleFill,
-              tint: .indigo
+          } else if let clarification = conversation.activeClarification,
+                    conversation.needsClarification {
+            ConversationClarificationHintButton(
+              clarification: clarification,
+              translatedQuestion: translatedClarification?.text,
+              onDismiss: {
+                await onDismissClarification()
+              }
             )
           }
         }
@@ -398,6 +403,115 @@ struct ConversationThreadHeaderView: View {
     }
 
     return "Copy Full Log"
+  }
+}
+
+private struct ConversationClarificationHintButton: View {
+  let clarification: DashboardConversation.Clarification
+  let translatedQuestion: String?
+  let onDismiss: @MainActor () async -> Void
+
+  @State private var isShowingPopover = false
+  @State private var isDismissing = false
+
+  var body: some View {
+    Button {
+      isShowingPopover.toggle()
+    } label: {
+      Image(systemSymbol: .questionmarkBubbleFill)
+        .font(.body.weight(.semibold))
+        .foregroundStyle(.indigo)
+        .frame(width: 26, height: 26)
+        .background(.indigo.opacity(0.11), in: Circle())
+        .overlay {
+          Circle()
+            .strokeBorder(.indigo.opacity(0.18), lineWidth: 1)
+        }
+    }
+    .buttonStyle(.plain)
+    .help(helpText)
+    .accessibilityLabel("Show clarification")
+    .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
+      popoverContent
+    }
+  }
+
+  private var popoverContent: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      HStack(alignment: .center, spacing: 10) {
+        Image(systemSymbol: .questionmarkBubbleFill)
+          .font(.title3)
+          .foregroundStyle(.indigo)
+
+        Text("Clarification Needed")
+          .font(.headline)
+
+        Spacer(minLength: 12)
+
+        WorkspaceInlineBadge(
+          title: clarification.status.replacingOccurrences(of: "_", with: " ").capitalized,
+          systemImage: .sparklesRectangleStack,
+          tint: .indigo
+        )
+      }
+
+      Text(questionText)
+        .font(.body)
+        .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
+
+      HStack(alignment: .center) {
+        Text(clarificationStatusSummary)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+
+        Spacer(minLength: 12)
+
+        Button {
+          Task {
+            isDismissing = true
+            await onDismiss()
+            isDismissing = false
+            isShowingPopover = false
+          }
+        } label: {
+          if isDismissing {
+            ProgressView()
+              .controlSize(.small)
+          } else {
+            Label("Hide", systemSymbol: .xmark)
+          }
+        }
+        .buttonStyle(.borderless)
+        .disabled(isDismissing)
+      }
+    }
+    .padding(16)
+    .frame(width: 360, alignment: .leading)
+  }
+
+  private var questionText: String {
+    displayedQuestion?.nilIfEmpty ?? "No clarification question text available."
+  }
+
+  private var helpText: String {
+    "Clarification needed: \(questionText)"
+  }
+
+  private var clarificationStatusSummary: String {
+    let updatedText = DashboardTimestampParser.relativeString(from: clarification.updatedAt) ?? clarification.updatedAt
+    return "Updated \(updatedText)"
+  }
+
+  private var displayedQuestion: String? {
+    let originalQuestion = clarification.question?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let translatedQuestion = translatedQuestion?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if let translatedQuestion, !translatedQuestion.isEmpty, translatedQuestion != originalQuestion {
+      return translatedQuestion
+    }
+
+    return originalQuestion
   }
 }
 

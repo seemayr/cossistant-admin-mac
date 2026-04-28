@@ -15,30 +15,13 @@ struct ConversationThreadCanvasView: View {
   let loadState: ConversationSelectionLoadState
   let showDeveloperLogs: Bool
   let translatedMessagesByID: [String: DashboardMessageTranslation]
-  let translatedClarification: DashboardMessageTranslation?
   let timelinePresentation: DashboardTimelinePresentationBundle?
   let canLoadMoreTimeline: Bool
   let isLoadingMoreTimeline: Bool
   let onLoadMoreTimeline: () -> Void
-  let onDismissClarification: @MainActor () async -> Void
 
   var body: some View {
     VStack(spacing: 0) {
-      if conversation.activeClarification != nil,
-         !conversation.needsHumanIntervention {
-        ConversationClarificationPanel(
-          conversation: conversation,
-          translatedQuestion: translatedClarification?.text,
-          onDismiss: {
-            await onDismissClarification()
-          }
-        )
-        .padding(.horizontal, ConversationWorkspaceLayout.panePadding)
-        .padding(.vertical, 16)
-
-        Divider()
-      }
-
       if typingEvent != nil || aiProcessingState != nil {
         ConversationLiveStatusSection(
           website: website,
@@ -102,107 +85,5 @@ struct ConversationThreadCanvasView: View {
       }
       .background(Color.clear)
     }
-  }
-}
-
-private struct ConversationClarificationPanel: View {
-  let conversation: DashboardConversation
-  let translatedQuestion: String?
-  let onDismiss: @MainActor () async -> Void
-
-  @State private var isDismissing = false
-
-  @ViewBuilder
-  var body: some View {
-    if let clarification = conversation.activeClarification {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack(alignment: .top, spacing: 12) {
-          Image(systemSymbol: .questionmarkBubbleFill)
-            .font(.title3)
-            .foregroundStyle(.indigo)
-            .frame(width: 24, height: 24)
-
-          VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 8) {
-              Text("Knowledge Clarification")
-                .font(.headline)
-
-              WorkspaceInlineBadge(
-                title: clarification.status.replacingOccurrences(of: "_", with: " ").capitalized,
-                systemImage: .sparklesRectangleStack,
-                tint: .indigo
-              )
-            }
-
-            Text(clarificationStatusSummary(for: clarification))
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-
-          Spacer(minLength: 0)
-
-          Button {
-            Task {
-              isDismissing = true
-              await onDismiss()
-              isDismissing = false
-            }
-          } label: {
-            if isDismissing {
-              ProgressView()
-                .controlSize(.small)
-                .frame(width: 24, height: 24)
-            } else {
-              Image(systemSymbol: .xmark)
-                .font(.caption.weight(.semibold))
-                .frame(width: 24, height: 24)
-            }
-          }
-          .buttonStyle(.plain)
-          .disabled(isDismissing)
-          .foregroundStyle(.tertiary)
-          .background(.quaternary.opacity(0.16), in: Circle())
-          .contentShape(Circle())
-          .help("Dismiss clarification")
-          .accessibilityLabel("Dismiss clarification")
-        }
-
-        if let question = displayedQuestion(for: clarification),
-           !question.isEmpty {
-          Text(question)
-            .font(.body)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-
-        Text("Reply, retry, and draft review still use the newer clarification workflow in the web dashboard.")
-          .font(.caption)
-          .foregroundStyle(.tertiary)
-      }
-      .padding(16)
-      .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-      .overlay {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .strokeBorder(.separator.opacity(0.14), lineWidth: 1)
-      }
-    }
-  }
-
-  private func clarificationStatusSummary(for clarification: DashboardConversation.Clarification) -> String {
-    let updatedText = DashboardTimestampParser.relativeString(from: clarification.updatedAt) ?? clarification.updatedAt
-    return "Updated \(updatedText)"
-  }
-
-  private func displayedQuestion(
-    for clarification: DashboardConversation.Clarification
-  ) -> String? {
-    let originalQuestion = clarification.question?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let translatedQuestion = translatedQuestion?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-    if let translatedQuestion, !translatedQuestion.isEmpty, translatedQuestion != originalQuestion {
-      return translatedQuestion
-    }
-
-    return originalQuestion
   }
 }

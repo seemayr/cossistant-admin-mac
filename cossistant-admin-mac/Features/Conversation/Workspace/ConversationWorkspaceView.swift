@@ -137,6 +137,7 @@ private struct ConversationThreadWorkspaceColumn: View {
         onToggleTranslations: actions.setShowTranslations,
         isTranslatingMessages: controls.isTranslatingMessages,
         translationErrorMessage: controls.translationErrorMessage,
+        translatedClarification: translatedClarification,
         showInspector: controls.showInspector,
         onToggleInspector: actions.setShowInspector,
         isCopyingConversationMessages: controls.isCopyingConversationMessages,
@@ -159,6 +160,7 @@ private struct ConversationThreadWorkspaceColumn: View {
         onPauseConversationAI: actions.pauseConversationAI,
         onResumeConversationAI: actions.resumeConversationAI,
         canUseOpenAIReplyDrafts: controls.canUseOpenAIReplyDrafts,
+        onDismissClarification: actions.dismissConversationClarification,
         onBuildFAQFromConversation: actions.buildFAQFromConversation
       )
 
@@ -177,14 +179,10 @@ private struct ConversationThreadWorkspaceColumn: View {
         loadState: loadState,
         showDeveloperLogs: controls.showDeveloperLogs,
         translatedMessagesByID: translatedMessagesByID,
-        translatedClarification: translatedClarification,
         timelinePresentation: timelinePresentation,
         canLoadMoreTimeline: controls.canLoadMoreTimeline,
         isLoadingMoreTimeline: controls.isLoadingMoreTimeline,
-        onLoadMoreTimeline: actions.loadMoreTimeline,
-        onDismissClarification: {
-          await actions.dismissConversationClarification()
-        }
+        onLoadMoreTimeline: actions.loadMoreTimeline
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
