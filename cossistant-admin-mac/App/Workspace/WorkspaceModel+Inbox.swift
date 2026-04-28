@@ -89,6 +89,12 @@ extension WorkspaceModel {
   }
 
   private func refreshInboxSnapshot() async {
+    guard !isRefreshingInboxSnapshot else { return }
+    guard !inboxStore.isLoadingMore else { return }
+
+    isRefreshingInboxSnapshot = true
+    defer { isRefreshingInboxSnapshot = false }
+
     do {
       let page = try await backendClient.conversations.fetchInbox(
         limit: Self.inboxPageSize,

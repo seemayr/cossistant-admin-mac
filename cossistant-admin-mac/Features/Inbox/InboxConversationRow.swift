@@ -85,10 +85,26 @@ struct InboxConversationRow: View {
                 .foregroundStyle(hasUnreadActivity ? .primary : .secondary)
                 .lineLimit(1)
 
+              if conversation.hasUpdatesSinceLastSeen {
+                Image(systemSymbol: .clockArrowTriangleheadCounterclockwiseRotate90)
+                  .font(.caption.weight(.semibold))
+                  .foregroundStyle(.secondary)
+                  .help("New messages since you last viewed this conversation")
+              }
+
               if let priorityIndicatorSymbol = conversation.priorityIndicatorSymbol {
                 Image(systemSymbol: priorityIndicatorSymbol)
                   .font(.caption.weight(.semibold))
                   .foregroundStyle(conversation.priorityIndicatorTint)
+              }
+
+              if let platformIndicatorSymbol = conversation.platformIndicatorSymbol,
+                 let platformIndicatorLabel = conversation.platformIndicatorLabel {
+                Image(systemSymbol: platformIndicatorSymbol)
+                  .font(.caption.weight(.semibold))
+                  .foregroundStyle(conversation.platformIndicatorTint)
+                  .accessibilityLabel(platformIndicatorLabel)
+                  .help(platformIndicatorLabel)
               }
             }
           }

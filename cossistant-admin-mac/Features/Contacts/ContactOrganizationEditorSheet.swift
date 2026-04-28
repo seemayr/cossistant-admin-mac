@@ -1,7 +1,7 @@
 import SwiftUI
 import CossistantAdmin
 
-struct ContactOrganizationEditorDraft {
+struct ContactOrganizationEditorDraft: Equatable {
   var id: String?
   var name: String?
   var externalId: String?
@@ -33,9 +33,22 @@ struct ContactOrganizationEditorDraft {
 
 struct ContactOrganizationEditorSheet: View {
   @Environment(\.dismiss) private var dismiss
-  @Binding var draft: ContactOrganizationEditorDraft
+  let initialDraft: ContactOrganizationEditorDraft
   let isSaving: Bool
   let onSave: @MainActor (ContactOrganizationEditorDraft) async -> Void
+
+  @State private var draft: ContactOrganizationEditorDraft
+
+  init(
+    draft: ContactOrganizationEditorDraft,
+    isSaving: Bool,
+    onSave: @escaping @MainActor (ContactOrganizationEditorDraft) async -> Void
+  ) {
+    self.initialDraft = draft
+    self.isSaving = isSaving
+    self.onSave = onSave
+    _draft = State(initialValue: draft)
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -74,6 +87,9 @@ struct ContactOrganizationEditorSheet: View {
     }
     .padding(20)
     .frame(width: 420)
+    .onChange(of: initialDraft) { _, newValue in
+      draft = newValue
+    }
   }
 
   private func binding(for keyPath: WritableKeyPath<ContactOrganizationEditorDraft, String?>) -> Binding<String> {

@@ -22,6 +22,7 @@ struct ConversationComposerView: View {
   @State private var translationPreview: DashboardMessageTranslation?
   @State private var translationPreviewErrorMessage: String?
   @State private var isShowingTranslationPreview = false
+  @State private var localDraftText = ""
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -48,7 +49,7 @@ struct ConversationComposerView: View {
             )
           }
           .buttonStyle(.bordered)
-          .disabled(isGeneratingReplyDraft || draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .disabled(isGeneratingReplyDraft || trimmedLocalDraftText.isEmpty)
         }
 
         if canUseTranslationPreview {
@@ -60,7 +61,7 @@ struct ConversationComposerView: View {
             Image(systemSymbol: .globe)
           }
           .buttonStyle(.bordered)
-          .disabled(isSending || isGeneratingReplyDraft || isPreviewingTranslation || draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .disabled(isSending || isGeneratingReplyDraft || isPreviewingTranslation || trimmedLocalDraftText.isEmpty)
           .help("Preview translation")
         }
 
@@ -85,7 +86,7 @@ struct ConversationComposerView: View {
         .disabled(
           isSending
             || isGeneratingReplyDraft
-            || (draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty)
+            || (trimmedLocalDraftText.isEmpty && attachments.isEmpty)
         )
       }
 
@@ -104,14 +105,14 @@ struct ConversationComposerView: View {
         }
       }
 
-      TextEditor(text: $draftText)
+      TextEditor(text: $localDraftText)
         .font(.body)
         .frame(minHeight: 96, maxHeight: 140)
         .scrollContentBackground(.hidden)
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(alignment: .topLeading) {
-          if draftText.isEmpty {
+          if localDraftText.isEmpty {
             Text(placeholder)
               .foregroundStyle(.tertiary)
               .padding(.horizontal, 18)
@@ -141,10 +142,20 @@ struct ConversationComposerView: View {
     .sheet(isPresented: $isShowingTranslationPreview) {
       if let translationPreview {
         ConversationDraftTranslationSheet(
-          originalText: draftText.trimmingCharacters(in: .whitespacesAndNewlines),
+          originalText: trimmedLocalDraftText,
           translation: translationPreview
         )
       }
+    }
+    .onAppear {
+      localDraftText = draftText
+    }
+    .onChange(of: draftText) { _, newValue in
+      guard localDraftText != newValue else { return }
+      localDraftText = newValue
+    }
+    .onDisappear {
+      commitLocalDraftText()
     }
   }
 
@@ -162,9 +173,13 @@ struct ConversationComposerView: View {
       : "Write an internal note…"
   }
 
+  private var trimmedLocalDraftText: String {
+    localDraftText.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
   @MainActor
   private func send() async {
-    let message = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let message = trimmedLocalDraftText
     let currentAttachments = attachments
 
     guard !message.isEmpty || !currentAttachments.isEmpty else {
@@ -175,22 +190,25 @@ struct ConversationComposerView: View {
     attachments = []
     attachmentErrorMessage = nil
     await onSendMessage(message, visibility, currentAttachments)
+    localDraftText = ""
     draftText = ""
     isSending = false
   }
 
   @MainActor
   private func generateReplyDraft() async {
-    let currentText = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let currentText = trimmedLocalDraftText
     guard !currentText.isEmpty else { return }
     guard let generatedDraft = await onGenerateReplyDraft(currentText) else { return }
+    localDraftText = generatedDraft
     draftText = generatedDraft
   }
 
   @MainActor
   private func previewTranslation() async {
-    let currentText = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let currentText = trimmedLocalDraftText
     guard !currentText.isEmpty else { return }
+    commitLocalDraftText()
 
     isPreviewingTranslation = true
     translationPreviewErrorMessage = nil
@@ -202,6 +220,11 @@ struct ConversationComposerView: View {
     } catch {
       translationPreviewErrorMessage = error.localizedDescription
     }
+  }
+
+  private func commitLocalDraftText() {
+    guard draftText != localDraftText else { return }
+    draftText = localDraftText
   }
 
   private func removeAttachment(_ id: DashboardComposerAttachment.ID) {

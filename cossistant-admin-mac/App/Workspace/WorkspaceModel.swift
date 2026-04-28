@@ -40,6 +40,7 @@ final class WorkspaceModel {
   var showDeveloperLogs = false
   var realtimeConnectionState: DashboardRealtimeConnectionState = .disconnected
   var lastRealtimeEventDate: Date?
+  var isRefreshingInboxSnapshot = false
   var isConnecting = false
   var hasRestoredSession = false
   var isShowingConfigurationSheet = false

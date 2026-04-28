@@ -16,6 +16,8 @@ Drafting rules:
 - do not invent screens, buttons, errors, or product behavior that are not supported by the conversation
 - capture the wording families users actually used, even if they sound different on the surface
 - always return the final FAQ in English, even when the conversation is in another language
+- translate any non-English evidence into natural support English before writing the final FAQ
+- keep `question`, `categories`, `relatedQuestions`, `answer`, and `notes` entirely in English
 
 Field constraints:
 

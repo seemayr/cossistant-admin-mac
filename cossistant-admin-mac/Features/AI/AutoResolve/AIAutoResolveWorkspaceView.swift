@@ -102,8 +102,8 @@ struct AIAutoResolveWorkspaceView: View {
   }
 
   private var autoResolveResultsCard: some View {
-    PrototypeInfoCard(title: "Results (\(store.results.count))") {
-      if store.results.isEmpty {
+    PrototypeInfoCard(title: "Results (\(filteredResults.count))") {
+      if !hasAutoResolveActivity {
         ContentUnavailableView(
           "No review results yet",
           systemImage: SFSymbol.sparkles.rawValue,
@@ -111,7 +111,21 @@ struct AIAutoResolveWorkspaceView: View {
         )
       } else {
         VStack(alignment: .leading, spacing: 12) {
-          ForEach(store.results) { result in
+          autoResolveResultSummary
+
+          if !store.results.isEmpty {
+            autoResolveCategoryFilters
+          }
+
+          if filteredResults.isEmpty {
+            ContentUnavailableView(
+              "No non-empty conversations",
+              systemImage: SFSymbol.checkmarkCircle.rawValue,
+              description: Text("Only empty conversations were closed in this run.")
+            )
+          }
+
+          ForEach(filteredResults) { result in
             AutoResolveResultRow(
               result: result,
               isSelected: result.conversationID == store.inspectedConversationID,
@@ -132,6 +146,70 @@ struct AIAutoResolveWorkspaceView: View {
         }
       }
     }
+  }
+
+  private var hasAutoResolveActivity: Bool {
+    !store.results.isEmpty || store.closedEmptyConversationCount > 0
+  }
+
+  private var filteredResults: [AutoResolveResult] {
+    guard let selectedCategoryFilter = store.selectedCategoryFilter else {
+      return store.results
+    }
+
+    return store.results.filter { $0.category == selectedCategoryFilter }
+  }
+
+  private var categoryCounts: [(category: AutoResolveConversationCategory, count: Int)] {
+    let counts = Dictionary(grouping: store.results, by: \.category)
+      .mapValues(\.count)
+
+    return AutoResolveConversationCategory.allCases.compactMap { category in
+      guard let count = counts[category], count > 0 else { return nil }
+      return (category, count)
+    }
+  }
+
+  private var autoResolveResultSummary: some View {
+    HStack(spacing: 12) {
+      Text("Closed empty convos: \(store.closedEmptyConversationCount.formatted(.number))")
+
+      Text("Non-empty auto-resolved: \(store.autoResolvedNonEmptyConversationCount.formatted(.number))")
+
+      Text("Kept open: \(store.keptOpenNonEmptyConversationCount.formatted(.number))")
+
+      Spacer(minLength: 0)
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
+  }
+
+  private var autoResolveCategoryFilters: some View {
+    ScrollView(.horizontal) {
+      HStack(spacing: 8) {
+        AutoResolveCategoryFilterChip(
+          title: "All",
+          count: store.results.count,
+          isSelected: store.selectedCategoryFilter == nil,
+          action: {
+            store.selectedCategoryFilter = nil
+          }
+        )
+
+        ForEach(categoryCounts, id: \.category) { item in
+          AutoResolveCategoryFilterChip(
+            title: item.category.label,
+            count: item.count,
+            isSelected: store.selectedCategoryFilter == item.category,
+            action: {
+              store.selectedCategoryFilter = item.category
+            }
+          )
+        }
+      }
+      .padding(.vertical, 2)
+    }
+    .scrollIndicators(.hidden)
   }
 
   private var autoResolveInspectorColumn: some View {
@@ -157,6 +235,29 @@ struct AIAutoResolveWorkspaceView: View {
       maxWidth: 520,
       maxHeight: .infinity
     )
+  }
+}
+
+private struct AutoResolveCategoryFilterChip: View {
+  let title: String
+  let count: Int
+  let isSelected: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      Text("\(title) (\(count.formatted(.number)))")
+        .font(.caption.weight(.medium))
+        .foregroundStyle(isSelected ? .primary : .secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(backgroundStyle, in: .capsule)
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var backgroundStyle: Color {
+    isSelected ? .accentColor.opacity(0.18) : .secondary.opacity(0.12)
   }
 }
 

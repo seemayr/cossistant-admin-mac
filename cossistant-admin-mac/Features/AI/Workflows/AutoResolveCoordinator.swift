@@ -67,8 +67,7 @@ final class AutoResolveCoordinator {
       return
     }
 
-    store.results = []
-    store.inspectedConversationID = nil
+    store.resetResults()
     log("Starting auto-resolve for \(candidates.count) conversations in \(scope.rawValue) queue")
     store.task = Task {
       await self.run(in: scope)
@@ -88,9 +87,7 @@ final class AutoResolveCoordinator {
   }
 
   func clearResults() {
-    store.results = []
-    store.inspectedConversationID = nil
-    store.statusMessage = nil
+    store.resetResults()
   }
 
   func run(in scope: InboxScope) async {
@@ -108,6 +105,7 @@ final class AutoResolveCoordinator {
       return
     }
 
+    store.resetResults()
     store.isRunning = true
     store.statusMessage = "Preparing \(candidates.count) conversations for AI auto-resolve…"
     defer { store.isRunning = false }
@@ -134,17 +132,7 @@ final class AutoResolveCoordinator {
           applyMutatedConversation(updatedConversation)
           await refreshSelectedConversationIfNeeded(conversation.id)
           resolvedWithoutAI += 1
-          store.results.append(
-            AutoResolveResult(
-              conversationID: conversation.id,
-              visitorID: conversation.visitorId,
-              outcome: .emptyResolved,
-              category: .unknown,
-              title: "Empty conversation",
-              body: "No message activity was found, so the conversation was resolved automatically.",
-              isSeen: !conversation.hasUnreadActivity
-            )
-          )
+          store.closedEmptyConversationCount = resolvedWithoutAI
           continue
         }
 
@@ -162,6 +150,7 @@ final class AutoResolveCoordinator {
           }
 
           failed += 1
+          store.keptOpenNonEmptyConversationCount = leftOpen + failed
           recordFailure(
             title: "Timeline fetch failed",
             conversation: conversation,
@@ -180,17 +169,7 @@ final class AutoResolveCoordinator {
           applyMutatedConversation(updatedConversation)
           await refreshSelectedConversationIfNeeded(conversation.id)
           resolvedWithoutAI += 1
-          store.results.append(
-            AutoResolveResult(
-              conversationID: conversation.id,
-              visitorID: conversation.visitorId,
-              outcome: .emptyResolved,
-              category: .unknown,
-              title: "Empty conversation",
-              body: "No visible message content was found, so the conversation was resolved automatically.",
-              isSeen: !conversation.hasUnreadActivity
-            )
-          )
+          store.closedEmptyConversationCount = resolvedWithoutAI
           log("Resolved conversation \(conversation.id) without AI because no visible message content was found")
           continue
         }
@@ -220,6 +199,7 @@ final class AutoResolveCoordinator {
             applyMutatedConversation(updatedConversation)
             await refreshSelectedConversationIfNeeded(conversation.id)
             resolvedWithAI += 1
+            store.autoResolvedNonEmptyConversationCount = resolvedWithAI
             store.results.append(
               AutoResolveResult(
                 conversationID: conversation.id,
@@ -235,6 +215,7 @@ final class AutoResolveCoordinator {
             )
           } else {
             leftOpen += 1
+            store.keptOpenNonEmptyConversationCount = leftOpen + failed
             store.results.append(
               AutoResolveResult(
                 conversationID: conversation.id,
@@ -259,6 +240,7 @@ final class AutoResolveCoordinator {
           }
 
           failed += 1
+          store.keptOpenNonEmptyConversationCount = leftOpen + failed
           recordFailure(
             title: "AI review failed",
             conversation: conversation,

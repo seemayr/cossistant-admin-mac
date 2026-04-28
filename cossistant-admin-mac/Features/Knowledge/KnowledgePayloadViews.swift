@@ -9,13 +9,13 @@ struct KnowledgePayloadCard: View {
     case .faq:
       if let payload = item.faqPayload {
         PrototypeInfoCard(title: "FAQ") {
-          PrototypeFact(label: "Question", value: payload.question)
-          PrototypeFact(label: "Answer", value: payload.answer)
-          PrototypeFact(
+          KnowledgeDetailFact(label: "Question", value: payload.question)
+          KnowledgeDetailFact(label: "Answer", value: payload.answer)
+          KnowledgeDetailFact(
             label: "Categories",
             value: payload.categories.isEmpty ? "None" : payload.categories.joined(separator: ", ")
           )
-          PrototypeFact(
+          KnowledgeDetailFact(
             label: "Related Questions",
             value: payload.relatedQuestions.isEmpty
               ? "None"
@@ -28,15 +28,15 @@ struct KnowledgePayloadCard: View {
     case .article:
       if let payload = item.articlePayload {
         PrototypeInfoCard(title: "Article") {
-          PrototypeFact(label: "Title", value: payload.title)
-          PrototypeFact(label: "Summary", value: payload.summary ?? "None")
-          PrototypeFact(
+          KnowledgeDetailFact(label: "Title", value: payload.title)
+          KnowledgeDetailFact(label: "Summary", value: payload.summary ?? "None")
+          KnowledgeDetailFact(
             label: "Keywords",
             value: payload.keywords.isEmpty ? "None" : payload.keywords.joined(separator: ", ")
           )
           if let heroImage = payload.heroImage {
-            PrototypeFact(label: "Hero Image", value: heroImage.src.absoluteString)
-            PrototypeFact(label: "Hero Alt", value: heroImage.alt ?? "None")
+            KnowledgeDetailFact(label: "Hero Image", value: heroImage.src.absoluteString)
+            KnowledgeDetailFact(label: "Hero Alt", value: heroImage.alt ?? "None")
           }
           KnowledgeTextBlock(title: "Markdown", text: payload.markdown)
         }
@@ -46,23 +46,23 @@ struct KnowledgePayloadCard: View {
     case .url:
       if let payload = item.urlPayload {
         PrototypeInfoCard(title: "Page Content") {
-          PrototypeFact(
+          KnowledgeDetailFact(
             label: "Estimated Tokens",
             value: payload.estimatedTokens.map(String.init) ?? "Unknown"
           )
-          PrototypeFact(
+          KnowledgeDetailFact(
             label: "Headings",
             value: payload.headings.isEmpty
               ? "None"
               : payload.headings.map { "H\($0.level): \($0.text)" }.joined(separator: "\n")
           )
-          PrototypeFact(
+          KnowledgeDetailFact(
             label: "Links",
             value: payload.links.isEmpty
               ? "None"
               : payload.links.map(\.absoluteString).joined(separator: "\n")
           )
-          PrototypeFact(
+          KnowledgeDetailFact(
             label: "Images",
             value: payload.images.isEmpty
               ? "None"
@@ -79,6 +79,27 @@ struct KnowledgePayloadCard: View {
         KnowledgeRawPayloadCard(payload: item.payload)
       }
     }
+  }
+}
+
+struct KnowledgeDetailFact: View {
+  let label: String
+  let value: String
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(label)
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.leading)
+
+      Text(value)
+        .font(.body)
+        .textSelection(.enabled)
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 

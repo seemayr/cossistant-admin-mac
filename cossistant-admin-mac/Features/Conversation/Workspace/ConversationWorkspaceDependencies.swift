@@ -60,6 +60,7 @@ struct ConversationWorkspaceActions: Sendable {
   let updateConversationTitle: TitleUpdateAction
   let updateConversationMetadata: MetadataUpdateAction
   let joinConversationEscalation: AsyncAction
+  let dismissConversationClarification: AsyncAction
   let pauseConversationAI: PauseAIAction
   let resumeConversationAI: AsyncAction
   let loadMoreTimeline: SyncAction

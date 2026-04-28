@@ -37,6 +37,8 @@ struct ConversationThreadHeaderView: View {
   let canUseOpenAIReplyDrafts: Bool
   let onBuildFAQFromConversation: () -> Void
 
+  private static let pauseUntilFurtherNoticeDurationMinutes = 60 * 24 * 365 * 100
+
   @State private var isEditingTitle = false
 
   var body: some View {
@@ -113,165 +115,213 @@ struct ConversationThreadHeaderView: View {
       VStack(alignment: .trailing, spacing: 12) {
         SyncStateBadge(state: realtimeConnectionState)
 
-        Menu {
-          if hasUnreadActivity {
-            Button {
-              Task {
+        HStack(spacing: 10) {
+          Button {
+            Task {
+              if hasUnreadActivity {
                 await onMarkConversationSeen()
-              }
-            } label: {
-              Label("Mark Read", systemSymbol: .checkmarkCircle)
-            }
-          } else {
-            Button {
-              Task {
+              } else {
                 await onMarkConversationUnread()
               }
-            } label: {
-              Label("Mark Unread", systemSymbol: .eyeSlash)
             }
+          } label: {
+            Image(systemSymbol: hasUnreadActivity ? .eye : .eyeSlash)
+              .font(.body.weight(.semibold))
           }
-
-          Divider()
-
-          if conversation.status == .open {
-            Button {
-              Task {
-                await onResolveConversation()
-              }
-            } label: {
-              Label("Resolve", systemSymbol: .checkmark)
-            }
-
-            Button(action: onResolveFromFAQ) {
-              Label("Resolve from FAQ", systemSymbol: .questionmarkBubble)
-            }
-
-            Button {
-              Task {
-                await onMarkConversationSpam()
-              }
-            } label: {
-              Label("Mark Spam", systemSymbol: .nosign)
-            }
-          } else if conversation.status == .resolved {
-            Button {
-              Task {
-                await onReopenConversation()
-              }
-            } label: {
-              Label("Reopen", systemSymbol: .arrowCounterclockwise)
-            }
-          } else if conversation.status == .spam {
-            Button {
-              Task {
-                await onMarkConversationNotSpam()
-              }
-            } label: {
-              Label("Not Spam", systemSymbol: .arrowUturnBackward)
-            }
-          }
-
-          Divider()
+          .buttonStyle(.borderless)
+          .help(hasUnreadActivity ? "Mark as seen" : "Mark as unseen")
 
           Button {
-            onCopyConversationMessages()
-          } label: {
-            Label(messagesCopyButtonTitle, systemSymbol: .documentOnDocument)
-          }
-
-          Button {
-            onCopyConversationFullLog()
-          } label: {
-            Label(fullLogCopyButtonTitle, systemSymbol: .textAlignleft)
-          }
-
-          Button {
-            onToggleDeveloperLogs(!showDeveloperLogs)
-          } label: {
-            Label(
-              showDeveloperLogs ? "Hide Dev Logs" : "Show Dev Logs",
-              systemSymbol: .appleTerminal
-            )
-          }
-
-          Divider()
-
-          Button {
-            onBuildFAQFromConversation()
-          } label: {
-            Label("Build FAQ", systemSymbol: .questionmarkBubble)
-          }
-          .disabled(!canUseOpenAIReplyDrafts)
-
-          Divider()
-
-          Button {
-            isEditingTitle = true
-          } label: {
-            Label("Edit Title", systemSymbol: .pencil)
-          }
-
-          if conversation.needsHumanIntervention {
-            Button {
-              Task {
-                await onJoinConversationEscalation()
-              }
-            } label: {
-              Label("Join Escalation", systemSymbol: .personCropCircleBadgePlus)
-            }
-          }
-
-          if conversation.isArchived {
-            Button {
-              Task {
-                await onUnarchiveConversation()
-              }
-            } label: {
-              Label("Unarchive", systemSymbol: .trayAndArrowUp)
-            }
-          } else {
-            Button {
-              Task {
-                await onArchiveConversation()
-              }
-            } label: {
-              Label("Archive", systemSymbol: .archivebox)
-            }
-          }
-
-          Divider()
-
-          if conversation.aiPausedUntil == nil {
-            Button("Pause AI for 10-min") {
-              Task {
-                await onPauseConversationAI(10)
-              }
-            }
-
-            Button("Pause AI for 1-hour") {
-              Task {
-                await onPauseConversationAI(60)
-              }
-            }
-
-            Button("Pause AI until further notice") {
-              Task {
-                await onPauseConversationAI(60 * 24 * 365 * 100)
-              }
-            }
-          } else {
-            Button("Resume AI Answers") {
-              Task {
+            Task {
+              if conversation.aiPausedUntil == nil {
+                await onPauseConversationAI(Self.pauseUntilFurtherNoticeDurationMinutes)
+              } else {
                 await onResumeConversationAI()
               }
             }
+          } label: {
+            Image(systemSymbol: conversation.aiPausedUntil == nil ? .lightbulbSlashFill : .lightbulbFill)
+              .font(.body.weight(.semibold))
           }
-        } label: {
-          Text("More options")
-            .font(.caption.weight(.medium))
+          .buttonStyle(.borderless)
+          .help(conversation.aiPausedUntil == nil ? "Pause AI until further notice" : "Resume AI answers")
+
+          if conversation.status != .spam, !conversation.isArchived {
+            Button {
+              Task {
+                if conversation.status == .resolved {
+                  await onReopenConversation()
+                } else {
+                  await onResolveConversation()
+                }
+              }
+            } label: {
+              Image(systemSymbol: conversation.status == .resolved ? .arrowCounterclockwise : .checkmarkCircle)
+                .font(.body.weight(.semibold))
+            }
+            .buttonStyle(.borderless)
+            .help(conversation.status == .resolved ? "Reopen conversation" : "Resolve conversation")
+          }
+
+          Menu {
+            if hasUnreadActivity {
+              Button {
+                Task {
+                  await onMarkConversationSeen()
+                }
+              } label: {
+                Label("Mark Read", systemSymbol: .checkmarkCircle)
+              }
+            } else {
+              Button {
+                Task {
+                  await onMarkConversationUnread()
+                }
+              } label: {
+                Label("Mark Unread", systemSymbol: .eyeSlash)
+              }
+            }
+
+            Divider()
+
+            if conversation.status == .open {
+              Button {
+                Task {
+                  await onResolveConversation()
+                }
+              } label: {
+                Label("Resolve", systemSymbol: .checkmark)
+              }
+
+              Button(action: onResolveFromFAQ) {
+                Label("Resolve from FAQ", systemSymbol: .questionmarkBubble)
+              }
+
+              Button {
+                Task {
+                  await onMarkConversationSpam()
+                }
+              } label: {
+                Label("Mark Spam", systemSymbol: .nosign)
+              }
+            } else if conversation.status == .resolved {
+              Button {
+                Task {
+                  await onReopenConversation()
+                }
+              } label: {
+                Label("Reopen", systemSymbol: .arrowCounterclockwise)
+              }
+            } else if conversation.status == .spam {
+              Button {
+                Task {
+                  await onMarkConversationNotSpam()
+                }
+              } label: {
+                Label("Not Spam", systemSymbol: .arrowUturnBackward)
+              }
+            }
+
+            Divider()
+
+            Button {
+              onCopyConversationMessages()
+            } label: {
+              Label(messagesCopyButtonTitle, systemSymbol: .documentOnDocument)
+            }
+
+            Button {
+              onCopyConversationFullLog()
+            } label: {
+              Label(fullLogCopyButtonTitle, systemSymbol: .textAlignleft)
+            }
+
+            Button {
+              onToggleDeveloperLogs(!showDeveloperLogs)
+            } label: {
+              Label(
+                showDeveloperLogs ? "Hide Dev Logs" : "Show Dev Logs",
+                systemSymbol: .appleTerminal
+              )
+            }
+
+            Divider()
+
+            Button {
+              onBuildFAQFromConversation()
+            } label: {
+              Label("Build FAQ", systemSymbol: .questionmarkBubble)
+            }
+            .disabled(!canUseOpenAIReplyDrafts)
+
+            Divider()
+
+            Button {
+              isEditingTitle = true
+            } label: {
+              Label("Edit Title", systemSymbol: .pencil)
+            }
+
+            if conversation.needsHumanIntervention {
+              Button {
+                Task {
+                  await onJoinConversationEscalation()
+                }
+              } label: {
+                Label("Join Escalation", systemSymbol: .personCropCircleBadgePlus)
+              }
+            }
+
+            Button {
+              if conversation.isArchived {
+                Task {
+                  await onUnarchiveConversation()
+                }
+              } else {
+                Task {
+                  await onArchiveConversation()
+                }
+              }
+            } label: {
+              Label(
+                conversation.isArchived ? "Unarchive" : "Archive",
+                systemSymbol: conversation.isArchived ? .trayAndArrowUp : .archivebox
+              )
+            }
+
+            Divider()
+
+            if conversation.aiPausedUntil == nil {
+              Button("Pause AI for 10-min") {
+                Task {
+                  await onPauseConversationAI(10)
+                }
+              }
+
+              Button("Pause AI for 1-hour") {
+                Task {
+                  await onPauseConversationAI(60)
+                }
+              }
+
+              Button("Pause AI until further notice") {
+                Task {
+                  await onPauseConversationAI(Self.pauseUntilFurtherNoticeDurationMinutes)
+                }
+              }
+            } else {
+              Button("Resume AI Answers") {
+                Task {
+                  await onResumeConversationAI()
+                }
+              }
+            }
+          } label: {
+            Text("More options")
+              .font(.caption.weight(.medium))
+          }
+          .menuStyle(.borderlessButton)
         }
-        .menuStyle(.borderlessButton)
 
         if canUseMessageTranslations || showTranslations || translationErrorMessage != nil {
           Toggle(isOn: Binding(

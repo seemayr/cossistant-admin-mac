@@ -134,3 +134,13 @@ struct InboxMetadataFilterSection: Identifiable, Hashable, Sendable {
   var id: String { key.rawValue }
   var label: String { key.label }
 }
+
+struct InboxChannelFilterOption: Identifiable, Hashable, Sendable {
+  let value: String
+
+  var id: String { value }
+
+  var label: String {
+    value.replacingOccurrences(of: "_", with: " ").capitalized
+  }
+}

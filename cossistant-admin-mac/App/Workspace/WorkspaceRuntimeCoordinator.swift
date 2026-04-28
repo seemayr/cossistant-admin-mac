@@ -45,15 +45,16 @@ final class WorkspaceRuntimeCoordinator {
     pollingTask?.cancel()
     pollingTask = Task {
       while !Task.isCancelled {
-        let interval = await MainActor.run {
-          connectionState().isConnected ? Duration.seconds(90) : Duration.seconds(30)
-        }
-
         do {
-          try await Task.sleep(for: interval)
+          try await Task.sleep(for: .seconds(60))
         } catch {
           return
         }
+
+        let isConnected = await MainActor.run {
+          connectionState().isConnected
+        }
+        guard !isConnected else { continue }
 
         await onRefresh()
       }

@@ -1,13 +1,11 @@
 import SwiftUI
 import CossistantAdmin
 
-private let frontendKnowledgeEditorTypes: [DashboardKnowledgeType] = [.faq, .article]
-
 struct KnowledgeEditorView: View {
   @Binding var draft: DashboardKnowledgeEditorDraft
   let availableAIAgents: [DashboardWebsite.AIAgent]
   let errorMessage: String?
-  let onSave: () -> Void
+  let onSave: (DashboardKnowledgeEditorDraft) async -> Void
   let onCancel: () -> Void
 
   var body: some View {
@@ -28,13 +26,16 @@ struct KnowledgeEditorView: View {
           HStack(spacing: 10) {
             Button("Cancel", action: onCancel)
             Button("Save") {
-              if draft.type != .url {
-                draft.sourceTitle = ""
-                draft.sourceURL = ""
+              Task {
+                var draftToSave = draft
+                if draftToSave.editorPayloadType != .url {
+                  draftToSave.sourceTitle = ""
+                  draftToSave.sourceURL = ""
+                }
+                await onSave(draftToSave)
               }
-              onSave()
             }
-              .buttonStyle(.borderedProminent)
+            .buttonStyle(.borderedProminent)
           }
         }
 
@@ -48,24 +49,22 @@ struct KnowledgeEditorView: View {
         }
 
         PrototypeInfoCard(title: "Common Fields") {
-          Picker("Type", selection: $draft.type) {
-            ForEach(draft.id == nil ? frontendKnowledgeEditorTypes : DashboardKnowledgeType.allCases) { type in
-              Text(type.label)
-                .tag(type)
-            }
-          }
-          .disabled(draft.id != nil)
+          HStack(alignment: .firstTextBaseline) {
+            Text("Type")
+              .font(.caption.weight(.semibold))
+              .foregroundStyle(.secondary)
 
-          if draft.type == .url {
+            Text(draft.editorTypeLabel)
+              .font(.body)
+          }
+
+          if draft.editorPayloadType == .url {
             TextField("Source title", text: $draft.sourceTitle)
               .textFieldStyle(.roundedBorder)
 
             TextField("Source URL", text: $draft.sourceURL)
               .textFieldStyle(.roundedBorder)
           }
-
-          TextField("Origin", text: $draft.origin)
-            .textFieldStyle(.roundedBorder)
 
           Picker(
             "Knowledge Owner",
@@ -109,7 +108,7 @@ private struct KnowledgePayloadEditorSection: View {
   @Binding var draft: DashboardKnowledgeEditorDraft
 
   var body: some View {
-    switch draft.type {
+    switch draft.editorPayloadType {
     case .faq:
       PrototypeInfoCard(title: "FAQ Payload") {
         TextField("Question", text: $draft.faqQuestion)

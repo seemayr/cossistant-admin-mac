@@ -1,4 +1,5 @@
 Source type: {{source_label}}
+Required final language: English only.
 
 FAQ authoring guide:
 {{guide_markdown}}

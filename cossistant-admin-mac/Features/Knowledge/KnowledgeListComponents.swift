@@ -118,11 +118,6 @@ struct KnowledgeRowView: View {
           .font(.headline)
           .lineLimit(2)
 
-        Text(item.origin)
-          .font(.caption)
-          .foregroundStyle(.tertiary)
-          .lineLimit(1)
-
         Text(aiAgentLabel)
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -155,7 +150,7 @@ struct KnowledgePaginationFooter: View {
         .font(.caption.weight(.medium))
         .foregroundStyle(.secondary)
 
-      Text("\(store.items.count) shown")
+      Text("\(store.filteredItems.count) shown")
         .font(.caption)
         .foregroundStyle(.tertiary)
 

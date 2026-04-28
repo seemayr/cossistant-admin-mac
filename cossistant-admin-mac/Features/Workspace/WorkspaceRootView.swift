@@ -35,22 +35,27 @@ struct WorkspaceRootView: View {
           openWindow(id: "launcher")
         }
       } else {
-        NavigationSplitView(columnVisibility: $splitViewVisibility) {
-          sidebarColumn
-        } content: {
-          contentColumn
-        } detail: {
-          detailColumn
+        if usesDetailOnlySplitLayout {
+          NavigationSplitView(columnVisibility: $splitViewVisibility) {
+            sidebarColumn
+          } detail: {
+            detailColumn
+          }
+          .navigationSplitViewStyle(.prominentDetail)
+        } else {
+          NavigationSplitView(columnVisibility: $splitViewVisibility) {
+            sidebarColumn
+          } content: {
+            contentColumn
+          } detail: {
+            detailColumn
+          }
+          .navigationSplitViewStyle(.prominentDetail)
         }
-        .navigationSplitViewStyle(.prominentDetail)
       }
     }
     .task {
       await model.restoreSessionIfNeeded()
-      syncSplitViewVisibility()
-    }
-    .onChange(of: activeRoute) { _, _ in
-      syncSplitViewVisibility()
     }
     .task(id: autoSeenTrigger) {
       if DashboardReadDebug.isTargetConversation(autoSeenTrigger.selectedConversationID) {
@@ -264,6 +269,10 @@ struct WorkspaceRootView: View {
         joinConversationEscalation: {
           guard let selectedConversationID = model.selectedConversationID else { return }
           await model.joinConversationEscalation(selectedConversationID)
+        },
+        dismissConversationClarification: {
+          guard let selectedConversationID = model.selectedConversationID else { return }
+          await model.dismissConversationClarification(selectedConversationID)
         },
         pauseConversationAI: { durationMinutes in
           guard let selectedConversationID = model.selectedConversationID else { return }
@@ -559,10 +568,6 @@ struct WorkspaceRootView: View {
       setSelectedRoute(route)
     }
     model.selectConversation(conversationID)
-  }
-
-  private func syncSplitViewVisibility() {
-    splitViewVisibility = usesDetailOnlySplitLayout ? .doubleColumn : .all
   }
 
   private var autoSeenTrigger: AutoSeenTrigger {

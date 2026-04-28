@@ -20,18 +20,17 @@ struct ConversationThreadCanvasView: View {
   let canLoadMoreTimeline: Bool
   let isLoadingMoreTimeline: Bool
   let onLoadMoreTimeline: () -> Void
-
-  @State private var dismissedClarificationRequestID: String?
+  let onDismissClarification: @MainActor () async -> Void
 
   var body: some View {
     VStack(spacing: 0) {
-      if let clarification = conversation.activeClarification,
-         dismissedClarificationRequestID != clarification.requestId {
+      if conversation.activeClarification != nil,
+         !conversation.needsHumanIntervention {
         ConversationClarificationPanel(
           conversation: conversation,
           translatedQuestion: translatedClarification?.text,
           onDismiss: {
-            dismissedClarificationRequestID = clarification.requestId
+            await onDismissClarification()
           }
         )
         .padding(.horizontal, ConversationWorkspaceLayout.panePadding)
@@ -57,11 +56,6 @@ struct ConversationThreadCanvasView: View {
 
       threadContent
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    .onChange(of: conversation.activeClarification?.requestId) { _, newRequestID in
-      if dismissedClarificationRequestID != newRequestID {
-        dismissedClarificationRequestID = nil
-      }
     }
   }
 
@@ -114,7 +108,9 @@ struct ConversationThreadCanvasView: View {
 private struct ConversationClarificationPanel: View {
   let conversation: DashboardConversation
   let translatedQuestion: String?
-  let onDismiss: () -> Void
+  let onDismiss: @MainActor () async -> Void
+
+  @State private var isDismissing = false
 
   @ViewBuilder
   var body: some View {
@@ -146,13 +142,24 @@ private struct ConversationClarificationPanel: View {
           Spacer(minLength: 0)
 
           Button {
-            onDismiss()
+            Task {
+              isDismissing = true
+              await onDismiss()
+              isDismissing = false
+            }
           } label: {
-            Image(systemSymbol: .xmark)
-              .font(.caption.weight(.semibold))
-              .frame(width: 24, height: 24)
+            if isDismissing {
+              ProgressView()
+                .controlSize(.small)
+                .frame(width: 24, height: 24)
+            } else {
+              Image(systemSymbol: .xmark)
+                .font(.caption.weight(.semibold))
+                .frame(width: 24, height: 24)
+            }
           }
           .buttonStyle(.plain)
+          .disabled(isDismissing)
           .foregroundStyle(.tertiary)
           .background(.quaternary.opacity(0.16), in: Circle())
           .contentShape(Circle())

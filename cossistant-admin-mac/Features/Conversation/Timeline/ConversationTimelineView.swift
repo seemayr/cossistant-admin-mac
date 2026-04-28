@@ -44,15 +44,6 @@ struct ConversationTimelineView: View {
 
   var body: some View {
     LazyVStack(alignment: .leading, spacing: 18) {
-      ForEach(timelinePresentation.renderables) { renderable in
-        switch renderable {
-        case .day(let marker):
-          TimelineDaySeparatorView(date: marker.date)
-        case .group(let group):
-          groupView(group)
-        }
-      }
-
       if canLoadMoreTimeline {
         Button(action: onLoadMoreTimeline) {
           Label(
@@ -62,7 +53,16 @@ struct ConversationTimelineView: View {
         }
         .buttonStyle(.borderless)
         .disabled(isLoadingMoreTimeline)
-        .padding(.top, 6)
+        .padding(.bottom, 6)
+      }
+
+      ForEach(timelinePresentation.renderables) { renderable in
+        switch renderable {
+        case .day(let marker):
+          TimelineDaySeparatorView(date: marker.date)
+        case .group(let group):
+          groupView(group)
+        }
       }
     }
     .frame(maxWidth: ConversationTimelineLayout.threadMaxWidth, alignment: .leading)

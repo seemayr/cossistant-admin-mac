@@ -1,5 +1,6 @@
 import SwiftUI
 import CossistantAdmin
+import SFSafeSymbols
 
 enum ConversationWorkspaceLayout {
   static let threadMinWidth: CGFloat = 540
@@ -180,23 +181,34 @@ private struct ConversationThreadWorkspaceColumn: View {
         timelinePresentation: timelinePresentation,
         canLoadMoreTimeline: controls.canLoadMoreTimeline,
         isLoadingMoreTimeline: controls.isLoadingMoreTimeline,
-        onLoadMoreTimeline: actions.loadMoreTimeline
+        onLoadMoreTimeline: actions.loadMoreTimeline,
+        onDismissClarification: {
+          await actions.dismissConversationClarification()
+        }
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
       Divider()
 
-      ConversationComposerView(
-        draftText: $composerDraftText,
-        visibility: $composerVisibility,
-        canUseOpenAIReplyDrafts: controls.canUseOpenAIReplyDrafts,
-        canUseTranslationPreview: controls.canUseConversationDraftTranslation,
-        isGeneratingReplyDraft: controls.isGeneratingReplyDraft,
-        replyDraftErrorMessage: controls.replyDraftErrorMessage,
-        onGenerateReplyDraft: actions.generateReplyDraft,
-        onPreviewTranslation: actions.previewDraftTranslation,
-        onSendMessage: actions.sendMessage
-      )
+      Group {
+        if conversation.needsHumanIntervention {
+          ConversationEscalationActionView(
+            onJoinConversationEscalation: actions.joinConversationEscalation
+          )
+        } else {
+          ConversationComposerView(
+            draftText: $composerDraftText,
+            visibility: $composerVisibility,
+            canUseOpenAIReplyDrafts: controls.canUseOpenAIReplyDrafts,
+            canUseTranslationPreview: controls.canUseConversationDraftTranslation,
+            isGeneratingReplyDraft: controls.isGeneratingReplyDraft,
+            replyDraftErrorMessage: controls.replyDraftErrorMessage,
+            onGenerateReplyDraft: actions.generateReplyDraft,
+            onPreviewTranslation: actions.previewDraftTranslation,
+            onSendMessage: actions.sendMessage
+          )
+        }
+      }
       .padding(.horizontal, ConversationWorkspaceLayout.panePadding)
       .padding(.vertical, 18)
       .background(.bar)
@@ -212,6 +224,42 @@ private struct ConversationThreadWorkspaceColumn: View {
           actions.setComposerDraftText(generatedDraft)
         }
       )
+    }
+  }
+}
+
+private struct ConversationEscalationActionView: View {
+  let onJoinConversationEscalation: @MainActor @Sendable () async -> Void
+
+  @State private var isJoining = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Label("Human help requested by AI", systemSymbol: .personFillBadgePlus)
+        .font(.headline)
+
+      Text("Join the conversation to add yourself as a participant and unlock the reply composer.")
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+
+      Button {
+        Task {
+          isJoining = true
+          await onJoinConversationEscalation()
+          isJoining = false
+        }
+      } label: {
+        Label(isJoining ? "Joining…" : "Join the conversation", systemSymbol: .personCropCircleBadgePlus)
+      }
+      .buttonStyle(.borderedProminent)
+      .disabled(isJoining)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(18)
+    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 20, style: .continuous)
+        .strokeBorder(.orange.opacity(0.25), lineWidth: 1)
     }
   }
 }

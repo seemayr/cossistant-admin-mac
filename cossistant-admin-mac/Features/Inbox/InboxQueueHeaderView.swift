@@ -46,6 +46,30 @@ struct InboxQueueHeaderView: View {
             }
           }
 
+          if !store.availableChannelFilters.isEmpty {
+            Menu("Channel") {
+              Button {
+                store.channelFilter = nil
+              } label: {
+                metadataMenuLabel(
+                  "Any Channel",
+                  isSelected: store.channelFilter == nil
+                )
+              }
+
+              ForEach(store.availableChannelFilters) { option in
+                Button {
+                  store.channelFilter = option.value
+                } label: {
+                  metadataMenuLabel(
+                    option.label,
+                    isSelected: store.channelFilter == option.value
+                  )
+                }
+              }
+            }
+          }
+
           if !store.availableMetadataFilters.isEmpty {
             Menu("Metadata") {
               ForEach(store.availableMetadataFilters) { section in
@@ -76,6 +100,7 @@ struct InboxQueueHeaderView: View {
 
           Divider()
 
+          Toggle("Previously opened", isOn: $store.onlyPreviouslyOpenedConversations)
           Toggle("Hide seen conversations", isOn: $store.hideSeenConversations)
           Toggle("Hide empty conversations", isOn: $store.hideEmptyConversations)
 
@@ -121,7 +146,9 @@ struct InboxQueueHeaderView: View {
     let values = [
       store.priorityFilter == .all ? nil : store.priorityFilter.label,
       store.sentimentFilter == .all ? nil : store.sentimentFilter.label,
+      store.channelFilter.map { "Channel: \(InboxChannelFilterOption(value: $0).label)" },
       metadataFilterSummary,
+      store.onlyPreviouslyOpenedConversations ? "Previously Opened" : nil,
       store.hideSeenConversations ? "Hide Seen" : nil,
       store.hideEmptyConversations ? "Has Messages" : nil,
     ]

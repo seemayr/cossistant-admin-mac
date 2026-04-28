@@ -5,6 +5,7 @@ import CossistantAdmin
 enum InboxScope: String, CaseIterable, Identifiable, Hashable {
   case all
   case unseen
+  case updated
   case open
   case humanIntervention
   case clarification
@@ -20,6 +21,8 @@ enum InboxScope: String, CaseIterable, Identifiable, Hashable {
       "All Conversations"
     case .unseen:
       "Unseen"
+    case .updated:
+      "Updated"
     case .open:
       "Open"
     case .humanIntervention:
@@ -41,6 +44,8 @@ enum InboxScope: String, CaseIterable, Identifiable, Hashable {
       "All"
     case .unseen:
       "Unseen"
+    case .updated:
+      "Updated"
     case .open:
       "Open"
     case .humanIntervention:
@@ -62,6 +67,8 @@ enum InboxScope: String, CaseIterable, Identifiable, Hashable {
       .trayFull
     case .unseen:
       .eyeSlash
+    case .updated:
+      .clockArrowTriangleheadCounterclockwiseRotate90
     case .open:
       .bubbleLeftAndBubbleRight
     case .humanIntervention:
@@ -85,6 +92,8 @@ extension InboxScope {
       !conversation.isArchived
     case .unseen:
       !conversation.isArchived && conversation.hasUnreadActivity
+    case .updated:
+      !conversation.isArchived && conversation.hasUpdatesSinceLastSeen
     case .open:
       !conversation.isArchived && conversation.status == .open
     case .humanIntervention:

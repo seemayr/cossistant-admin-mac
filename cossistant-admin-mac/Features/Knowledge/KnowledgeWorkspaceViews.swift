@@ -20,7 +20,7 @@ struct KnowledgeListView: View {
         onCreate: onCreate
       )
 
-      List(store.items, selection: $selection) { item in
+      List(store.filteredItems, selection: $selection) { item in
         KnowledgeRowView(
           item: item,
           aiAgentLabel: aiAgentLabel(for: item.aiAgentId)
@@ -42,11 +42,15 @@ struct KnowledgeListView: View {
           ProgressView("Loading knowledge…")
         } else if store.isLoadingList && !store.items.isEmpty {
           ProgressView("Loading knowledge…")
-        } else if store.items.isEmpty {
+        } else if store.filteredItems.isEmpty {
           ContentUnavailableView(
-            "No knowledge yet",
+            store.hasActiveTitleSearch ? "No matching knowledge" : "No knowledge yet",
             systemImage: SFSafeSymbols.SFSymbol.booksVertical.rawValue,
-            description: Text("Knowledge sources and FAQs will appear here once loaded.")
+            description: Text(
+              store.hasActiveTitleSearch
+                ? "Try a different title search or clear the search."
+                : "Knowledge sources and FAQs will appear here once loaded."
+            )
           )
         }
       }
@@ -75,6 +79,7 @@ struct KnowledgeListView: View {
 
       KnowledgePaginationFooter(store: store)
     }
+    .searchable(text: $store.searchText, prompt: "Search knowledge titles")
   }
 
   private func aiAgentLabel(for aiAgentID: String?) -> String {
@@ -107,19 +112,15 @@ struct KnowledgeDetailView: View {
 
   var body: some View {
     Group {
-      if let draft {
+      if draft != nil {
         KnowledgeEditorView(
           draft: Binding(
-            get: { draft },
-            set: { self.draft = $0 }
+            get: { draft ?? DashboardKnowledgeEditorDraft.blank(type: .faq) },
+            set: { draft = $0 }
           ),
           availableAIAgents: availableAIAgents,
           errorMessage: errorMessage,
-          onSave: {
-            Task {
-              await onSave(draft)
-            }
-          },
+          onSave: onSave,
           onCancel: onCancelEditing
         )
       } else if isLoading {
@@ -157,16 +158,15 @@ struct KnowledgeDetailView: View {
             }
 
             PrototypeInfoCard(title: "Source") {
-              PrototypeFact(label: "Type", value: item.type.label)
-              PrototypeFact(label: "Origin", value: item.origin)
-              PrototypeFact(label: "Included", value: item.isIncluded ? "Yes" : "No")
-              PrototypeFact(label: "AI Agent", value: aiAgentLabel(for: item.aiAgentId))
-              PrototypeFact(label: "Link Source ID", value: item.linkSourceId ?? "None")
+              KnowledgeDetailFact(label: "Type", value: item.type.label)
+              KnowledgeDetailFact(label: "Included", value: item.isIncluded ? "Yes" : "No")
+              KnowledgeDetailFact(label: "AI Agent", value: aiAgentLabel(for: item.aiAgentId))
+              KnowledgeDetailFact(label: "Link Source ID", value: item.linkSourceId ?? "None")
               if let sourceURL = item.sourceUrl?.absoluteString {
-                PrototypeFact(label: "Source URL", value: sourceURL)
+                KnowledgeDetailFact(label: "Source URL", value: sourceURL)
               }
               if let sourceTitle = item.sourceTitle {
-                PrototypeFact(label: "Source Title", value: sourceTitle)
+                KnowledgeDetailFact(label: "Source Title", value: sourceTitle)
               }
               if let aiAgentID = item.aiAgentId {
                 Button("Open Agent") {
@@ -176,10 +176,10 @@ struct KnowledgeDetailView: View {
             }
 
             PrototypeInfoCard(title: "Storage") {
-              PrototypeFact(label: "Size", value: "\(item.sizeBytes) bytes")
-              PrototypeFact(label: "Created", value: item.createdAbsoluteText)
-              PrototypeFact(label: "Updated", value: item.updatedAbsoluteText)
-              PrototypeFact(label: "Content Hash", value: item.contentHash)
+              KnowledgeDetailFact(label: "Size", value: "\(item.sizeBytes) bytes")
+              KnowledgeDetailFact(label: "Created", value: item.createdAbsoluteText)
+              KnowledgeDetailFact(label: "Updated", value: item.updatedAbsoluteText)
+              KnowledgeDetailFact(label: "Content Hash", value: item.contentHash)
             }
 
             KnowledgePayloadCard(item: item)
@@ -187,7 +187,7 @@ struct KnowledgeDetailView: View {
             if let metadata = item.metadata, !metadata.isEmpty {
               PrototypeInfoCard(title: "Metadata") {
                 ForEach(metadata.dashboardSortedEntries, id: \.0) { key, value in
-                  PrototypeFact(label: key, value: value.dashboardDisplayText)
+                  KnowledgeDetailFact(label: key, value: value.dashboardDisplayText)
                 }
               }
             }

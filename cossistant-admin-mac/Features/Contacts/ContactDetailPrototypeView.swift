@@ -41,7 +41,7 @@ struct ContactDetailPrototypeView: View {
     }
     .sheet(isPresented: $isPresentingOrganizationEditor) {
       ContactOrganizationEditorSheet(
-        draft: $organizationEditorDraft,
+        draft: organizationEditorDraft,
         isSaving: store.isLoadingDetail,
         onSave: { draft in
           guard let organizationName = draft.name?.trimmingCharacters(in: .whitespacesAndNewlines),

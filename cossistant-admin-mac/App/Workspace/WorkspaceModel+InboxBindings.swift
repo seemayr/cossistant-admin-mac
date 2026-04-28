@@ -23,6 +23,11 @@ extension WorkspaceModel {
     set { inboxStore.sentimentFilter = newValue }
   }
 
+  var inboxChannelFilter: String? {
+    get { inboxStore.channelFilter }
+    set { inboxStore.channelFilter = newValue }
+  }
+
   var inboxMetadataFilters: [InboxMetadataFilterKey: JSONValue] {
     get { inboxStore.metadataFilters }
     set { inboxStore.metadataFilters = newValue }
@@ -73,6 +78,10 @@ extension WorkspaceModel {
 
   var availableInboxMetadataFilters: [InboxMetadataFilterSection] {
     inboxStore.availableMetadataFilters
+  }
+
+  var availableInboxChannelFilters: [InboxChannelFilterOption] {
+    inboxStore.availableChannelFilters
   }
 
   var canLoadMore: Bool {

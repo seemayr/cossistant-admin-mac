@@ -17,6 +17,8 @@ struct FAQDraftingWorkspaceView: View {
   let onSaveAndTrainSuggestion: () async -> Void
   let onOpenSavedKnowledge: () -> Void
 
+  @State private var editableDraft = FAQDraft()
+
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 18) {
@@ -43,13 +45,13 @@ struct FAQDraftingWorkspaceView: View {
             FAQDraftEditorCard(
               title: "Manual Draft",
               subtitle: "These fields stay editable. Optimize creates a separate suggestion instead of overwriting this draft.",
-              draft: $store.draft,
+              draft: $editableDraft,
               isEditable: true
             )
 
             FAQTrainingStatsCard(
               title: "Manual Draft Training Stats",
-              draft: store.draft
+              draft: editableDraft
             )
           }
           .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -69,6 +71,13 @@ struct FAQDraftingWorkspaceView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .textSelection(.enabled)
     }
+    .onAppear {
+      editableDraft = store.draft
+    }
+    .onChange(of: store.draft) { _, newValue in
+      guard editableDraft != newValue else { return }
+      editableDraft = newValue
+    }
   }
 
   private var faqActionCard: some View {
@@ -85,9 +94,10 @@ struct FAQDraftingWorkspaceView: View {
 
       HStack(spacing: 12) {
         Button(store.isOptimizing ? "Optimizing…" : "Optimize Draft") {
+          commitEditableDraft()
           onOptimizeDraft()
         }
-        .disabled(!store.canOptimize)
+        .disabled(!canOptimizeEditableDraft)
 
         Button(store.isBuildingFromConversation ? "Building…" : "Build from Selected Conversation") {
           onBuildFromSelectedConversation()
@@ -97,7 +107,7 @@ struct FAQDraftingWorkspaceView: View {
         Button("Reset Draft") {
           onResetDraft()
         }
-        .disabled(!store.draft.hasMeaningfulContent)
+        .disabled(!editableDraft.hasMeaningfulContent)
 
         if store.suggestion != nil {
           Button("Clear Suggestion") {
@@ -161,10 +171,11 @@ struct FAQDraftingWorkspaceView: View {
       HStack(spacing: 12) {
         Button(store.isSavingToKnowledge ? "Saving…" : "Save Draft") {
           Task {
+            commitEditableDraft()
             await onSaveDraftToKnowledge()
           }
         }
-        .disabled(!store.canSaveDraftToKnowledge)
+        .disabled(!canSaveEditableDraftToKnowledge)
 
         Button(store.isSavingToKnowledge ? "Saving…" : "Save Suggestion") {
           Task {
@@ -175,6 +186,7 @@ struct FAQDraftingWorkspaceView: View {
 
         Button(store.isStartingTraining ? "Training…" : "Save & Train") {
           Task {
+            commitEditableDraft()
             await onSaveAndTrainSuggestion()
           }
         }
@@ -183,7 +195,7 @@ struct FAQDraftingWorkspaceView: View {
           (store.selectedAIAgentID ?? soleAvailableAIAgentID) == nil
             || store.isSavingToKnowledge
             || store.isStartingTraining
-            || (!store.canSaveDraftToKnowledge && !store.canSaveSuggestionToKnowledge)
+            || (!canSaveEditableDraftToKnowledge && !store.canSaveSuggestionToKnowledge)
         )
 
         Spacer()
@@ -213,6 +225,26 @@ struct FAQDraftingWorkspaceView: View {
         }
       }
     }
+  }
+
+  private var canOptimizeEditableDraft: Bool {
+    store.hasOpenAIAPIKey
+      && editableDraft.hasMeaningfulContent
+      && !store.isOptimizing
+      && !store.isBuildingFromConversation
+  }
+
+  private var canSaveEditableDraftToKnowledge: Bool {
+    editableDraft.hasMeaningfulContent
+      && !store.isOptimizing
+      && !store.isBuildingFromConversation
+      && !store.isSavingToKnowledge
+      && !store.isStartingTraining
+  }
+
+  private func commitEditableDraft() {
+    guard store.draft != editableDraft else { return }
+    store.draft = editableDraft
   }
 }
 

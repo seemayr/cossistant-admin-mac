@@ -84,4 +84,41 @@ extension DashboardConversation {
       return .red
     }
   }
+
+  var platformIndicatorSymbol: SFSymbol? {
+    switch normalizedChannel {
+    case "android":
+      return .aCircleFill
+    case "apple", "ios":
+      return .appleLogo
+    default:
+      return nil
+    }
+  }
+
+  var platformIndicatorLabel: String? {
+    switch normalizedChannel {
+    case "android":
+      return "Android"
+    case "apple", "ios":
+      return "Apple"
+    default:
+      return nil
+    }
+  }
+
+  var platformIndicatorTint: Color {
+    switch normalizedChannel {
+    case "android":
+      return .green
+    case "apple", "ios":
+      return .secondary
+    default:
+      return .secondary
+    }
+  }
+
+  private var normalizedChannel: String {
+    channel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
 }

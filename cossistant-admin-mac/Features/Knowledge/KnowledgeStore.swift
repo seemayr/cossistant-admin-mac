@@ -30,7 +30,7 @@ final class KnowledgeStore {
   var items: [DashboardKnowledge] = []
   var selectedKnowledge: DashboardKnowledge?
   var page = 1
-  var pageSize = 20 {
+  var pageSize = 100 {
     didSet {
       guard pageSize != oldValue else { return }
       handleQueryInputsChanged()
@@ -39,6 +39,7 @@ final class KnowledgeStore {
   var totalCount = 0
   var hasMore = false
   var hasLoadedListOnce = false
+  var searchText = ""
   var filterType: DashboardKnowledgeType? {
     didSet {
       guard filterType != oldValue else { return }
@@ -73,8 +74,22 @@ final class KnowledgeStore {
   var isLoadingDetail = false
   var errorMessage: String?
 
+  var filteredItems: [DashboardKnowledge] {
+    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !query.isEmpty else { return items }
+
+    return items.filter { item in
+      item.titleText.localizedCaseInsensitiveContains(query)
+    }
+  }
+
+  var hasActiveTitleSearch: Bool {
+    !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
   var hasConfiguredFilters: Bool {
     filterType != nil
+      || hasActiveTitleSearch
       || filterIncluded != .all
       || filterAIAgentScope != .all
       || filterSpecificAIAgentID != nil
@@ -97,6 +112,7 @@ final class KnowledgeStore {
     totalCount = 0
     hasMore = false
     hasLoadedListOnce = false
+    searchText = ""
     filterIncluded = .all
     filterAIAgentScope = .all
     filterSpecificAIAgentID = nil
@@ -120,6 +136,7 @@ final class KnowledgeStore {
         filterSpecificAIAgentID = nil
       }
       filterLinkSourceID = nil
+      searchText = ""
     }
     print("[KnowledgeUI][macOS] reset to all knowledge filters")
   }

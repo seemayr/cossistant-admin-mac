@@ -200,6 +200,12 @@ extension WorkspaceModel {
     }
   }
 
+  func dismissConversationClarification(_ conversationID: DashboardConversation.ID) async {
+    errorMessage = nil
+    inboxStore.dismissActiveClarificationLocally(for: conversationID)
+    conversationStore.translatedClarification = nil
+  }
+
   func pauseConversationAI(
     _ conversationID: DashboardConversation.ID,
     durationMinutes: Int

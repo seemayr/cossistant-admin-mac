@@ -11,6 +11,7 @@ Review standards:
 - keep Categories concise and Related Questions distinct
 - prefer outputs that keep Question + Answer inside the current single-chunk target when fidelity allows
 - ensure the final FAQ and notes are written in English
+- translate any remaining non-English wording into natural English across every field
 
 If the candidate is already strong, keep it close. If it is weak, rewrite it decisively.
 

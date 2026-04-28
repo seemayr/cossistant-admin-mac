@@ -1,6 +1,7 @@
 Workspace: {{workspace_name}}
 Conversation title: {{conversation_title}}
 Message count: {{message_count}}
+Required output language: English only.
 
 FAQ authoring guide:
 {{guide_markdown}}

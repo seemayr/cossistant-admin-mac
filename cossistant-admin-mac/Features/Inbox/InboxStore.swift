@@ -1,12 +1,28 @@
 import Foundation
 import Observation
+import OSLog
 import CossistantAdmin
 
 @Observable @MainActor
 final class InboxStore {
+  private enum DefaultsKey {
+    static let locallyDismissedClarificationRequestIDs = "dashboard.locally-dismissed-clarification-request-ids"
+  }
+
+  private struct ConversationMetrics {
+    let createdAtDate: Date
+    let latestActivityDate: Date
+    let hasUnreadActivity: Bool
+    let priorityRank: Int
+    let sentimentCategory: DashboardConversationSentiment
+    let sentimentSortRank: Int
+  }
+
   private var configuration: DashboardConfiguration?
+  private let defaults: UserDefaults
   private var inboxPrefetchTask: Task<Void, Never>?
   private var metadataHydrationTask: Task<Void, Never>?
+  private var locallyDismissedClarificationRequestIDs: Set<String>
 
   var searchText = "" {
     didSet {
@@ -28,6 +44,11 @@ final class InboxStore {
       rebuildDerivedState()
     }
   }
+  var channelFilter: String? {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
   var metadataFilters: [InboxMetadataFilterKey: JSONValue] = [:] {
     didSet {
       rebuildDerivedState()
@@ -39,6 +60,11 @@ final class InboxStore {
     }
   }
   var hideSeenConversations = false {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var onlyPreviouslyOpenedConversations = false {
     didSet {
       rebuildDerivedState()
     }
@@ -58,10 +84,18 @@ final class InboxStore {
   }
   private var manuallyUnreadConversationIDs: Set<String> = []
   private(set) var filteredConversations: [DashboardConversation] = []
+  private(set) var availableChannelFilters: [InboxChannelFilterOption] = []
   private(set) var availableMetadataFilters: [InboxMetadataFilterSection] = []
   private var shownConversationsByScope: [InboxScope: [DashboardConversation]] = [:]
   private var shownConversationCountsByScope: [InboxScope: Int] = [:]
   private var totalConversationCountsByScope: [InboxScope: Int] = [:]
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    self.locallyDismissedClarificationRequestIDs = Set(
+      defaults.stringArray(forKey: DefaultsKey.locallyDismissedClarificationRequestIDs) ?? []
+    )
+  }
 
   func setConfiguration(_ configuration: DashboardConfiguration?) {
     self.configuration = configuration
@@ -74,9 +108,11 @@ final class InboxStore {
     sortMode = .latestActivity
     priorityFilter = .all
     sentimentFilter = .all
+    channelFilter = nil
     metadataFilters = [:]
     hideEmptyConversations = true
     hideSeenConversations = false
+    onlyPreviouslyOpenedConversations = false
     conversations = []
     nextCursor = nil
     loadedPageCount = 0
@@ -85,7 +121,7 @@ final class InboxStore {
   }
 
   func applyBootstrap(_ page: DashboardConversationPage) {
-    conversations = page.items
+    conversations = page.items.map { applyingLocalClarificationDismissal(to: $0) }
     nextCursor = page.nextCursor
     loadedPageCount = 1
     searchText = ""
@@ -95,8 +131,10 @@ final class InboxStore {
   var hasActiveConversationFilters: Bool {
     priorityFilter != .all
       || sentimentFilter != .all
+      || channelFilter != nil
       || !metadataFilters.isEmpty
       || hideSeenConversations
+      || onlyPreviouslyOpenedConversations
   }
 
   var canLoadMore: Bool {
@@ -118,9 +156,11 @@ final class InboxStore {
   func clearFilters() {
     priorityFilter = .all
     sentimentFilter = .all
+    channelFilter = nil
     metadataFilters = [:]
     hideEmptyConversations = true
     hideSeenConversations = false
+    onlyPreviouslyOpenedConversations = false
   }
 
   func setManuallyUnreadConversationIDs(_ conversationIDs: Set<String>) {
@@ -141,58 +181,6 @@ final class InboxStore {
     totalConversationCountsByScope[scope] ?? 0
   }
 
-  func sortConversations(_ scopedConversations: [DashboardConversation]) -> [DashboardConversation] {
-    switch sortMode {
-    case .latestActivity:
-      return scopedConversations.sorted {
-        if $0.latestActivityDate != $1.latestActivityDate {
-          return $0.latestActivityDate > $1.latestActivityDate
-        }
-
-        return ($0.createdAtDate ?? .distantPast) > ($1.createdAtDate ?? .distantPast)
-      }
-    case .priority:
-      return scopedConversations.sorted {
-        if $0.priorityRank != $1.priorityRank {
-          return $0.priorityRank > $1.priorityRank
-        }
-
-        return $0.latestActivityDate > $1.latestActivityDate
-      }
-    case .sentiment:
-      return scopedConversations.sorted {
-        if $0.sentimentSortRank != $1.sentimentSortRank {
-          return $0.sentimentSortRank > $1.sentimentSortRank
-        }
-
-        return $0.latestActivityDate > $1.latestActivityDate
-      }
-    case .createdAt:
-      return scopedConversations.sorted {
-        if $0.createdAtDate != $1.createdAtDate {
-          return ($0.createdAtDate ?? .distantPast) > ($1.createdAtDate ?? .distantPast)
-        }
-
-        return $0.latestActivityDate > $1.latestActivityDate
-      }
-    }
-  }
-
-  func inboxScopedConversations(
-    in scope: InboxScope,
-    applySearch: Bool
-  ) -> [DashboardConversation] {
-    let searchableConversations = applySearch ? filteredConversations : conversations
-
-    return searchableConversations
-      .filter { conversation($0, isIncludedIn: scope) }
-      .filter { priorityFilter.includes($0.priority) }
-      .filter { sentimentFilter.includes($0.sentimentCategory) }
-      .filter { conversationMatchesMetadataFilters($0) }
-      .filter { !hideSeenConversations || hasUnreadActivity($0) }
-      .filter { !hideEmptyConversations || $0.hasContent }
-  }
-
   func conversationMatchesMetadataFilters(_ conversation: DashboardConversation) -> Bool {
     for (key, expectedValue) in metadataFilters {
       guard conversation.metadata?[key.rawValue] == expectedValue else {
@@ -201,6 +189,11 @@ final class InboxStore {
     }
 
     return true
+  }
+
+  func conversationMatchesChannelFilter(_ conversation: DashboardConversation) -> Bool {
+    guard let channelFilter else { return true }
+    return conversation.channel == channelFilter
   }
 
   func conversation(
@@ -212,6 +205,8 @@ final class InboxStore {
       return !conversation.isArchived
     case .unseen:
       return !conversation.isArchived && hasUnreadActivity(conversation)
+    case .updated:
+      return !conversation.isArchived && conversation.hasUpdatesSinceLastSeen
     case .open:
       return !conversation.isArchived && conversation.status == .open
     case .humanIntervention:
@@ -237,12 +232,8 @@ final class InboxStore {
   ) async {
     guard let nextCursor, !isLoadingMore, let configuration else { return }
 
-    print(
-      "[Inbox] loadMore start",
-      "visible=\(conversations.count)",
-      "nextCursor=\(nextCursor)",
-      "batchLimit=\(max(1, pageBatchLimit))",
-      "loadedPages=\(loadedPageCount)"
+    InboxDiagnostics.log(
+      "[Inbox] loadMore start visible=\(conversations.count) nextCursor=\(nextCursor) batchLimit=\(max(1, pageBatchLimit)) loadedPages=\(loadedPageCount)"
     )
 
     isLoadingMore = true
@@ -260,23 +251,17 @@ final class InboxStore {
       loadedPageCount += result.loadedPageCount
       scheduleMetadataHydrationIfNeeded()
 
-      print(
-        "[Inbox] loadMore success",
-        "visible=\(conversations.count)",
-        "loadedPages=\(loadedPageCount)",
-        "nextCursor=\(self.nextCursor ?? "nil")"
+      InboxDiagnostics.log(
+        "[Inbox] loadMore success visible=\(conversations.count) loadedPages=\(loadedPageCount) nextCursor=\(self.nextCursor ?? "nil")"
       )
     } else {
-      print(
-        "[Inbox] loadMore no progress",
-        "visible=\(conversations.count)",
-        "loadedPages=\(loadedPageCount)",
-        "nextCursor=\(self.nextCursor ?? "nil")"
+      InboxDiagnostics.log(
+        "[Inbox] loadMore no progress visible=\(conversations.count) loadedPages=\(loadedPageCount) nextCursor=\(self.nextCursor ?? "nil")"
       )
     }
 
     if let error = result.error {
-      print("[Inbox] loadMore error", error.localizedDescription)
+      InboxDiagnostics.error("[Inbox] loadMore error \(error.localizedDescription)")
       onError(error)
     }
   }
@@ -309,18 +294,16 @@ final class InboxStore {
   }
 
   func mergeSnapshot(_ page: DashboardConversationPage) {
-    print(
-      "[Inbox] refresh snapshot",
-      "pageCount=\(page.items.count)",
-      "nextCursor=\(page.nextCursor ?? "nil")",
-      "loadedPages=\(loadedPageCount)",
-      "existing=\(conversations.count)"
+    InboxDiagnostics.log(
+      "[Inbox] refresh snapshot pageCount=\(page.items.count) nextCursor=\(page.nextCursor ?? "nil") loadedPages=\(loadedPageCount) existing=\(conversations.count)"
     )
 
     let refreshedIDs = Set(page.items.map(\.id))
     let existingConversationsByID = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
     let mergedPageItems = page.items.map { item in
-      guard let existing = existingConversationsByID[item.id] else { return item }
+      guard let existing = existingConversationsByID[item.id] else {
+        return applyingLocalClarificationDismissal(to: item)
+      }
 
       return DashboardConversation(
         id: item.id,
@@ -352,7 +335,7 @@ final class InboxStore {
         aiPausedUntil: item.aiPausedUntil,
         lastMessageTimelineItem: item.lastMessageTimelineItem ?? existing.lastMessageTimelineItem,
         lastTimelineItem: item.lastTimelineItem ?? existing.lastTimelineItem,
-        activeClarification: item.activeClarification ?? existing.activeClarification,
+        activeClarification: locallyVisibleClarification(item.activeClarification),
         dashboardLocked: item.dashboardLocked,
         dashboardLockReason: item.dashboardLockReason
       )
@@ -375,6 +358,56 @@ final class InboxStore {
   func conversation(withID id: String?) -> DashboardConversation? {
     guard let id else { return nil }
     return conversations.first(where: { $0.id == id })
+  }
+
+  @discardableResult
+  func dismissActiveClarificationLocally(for conversationID: String) -> String? {
+    guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else {
+      return nil
+    }
+    guard let requestID = conversations[index].activeClarification?.requestId else {
+      return nil
+    }
+
+    locallyDismissedClarificationRequestIDs.insert(requestID)
+    persistLocallyDismissedClarificationRequestIDs()
+
+    let existing = conversations[index]
+    conversations[index] = DashboardConversation(
+      id: existing.id,
+      status: existing.status,
+      priority: existing.priority,
+      organizationId: existing.organizationId,
+      visitorId: existing.visitorId,
+      visitor: existing.visitor,
+      websiteId: existing.websiteId,
+      metadata: existing.metadata,
+      channel: existing.channel,
+      title: existing.title,
+      visitorTitle: existing.visitorTitle,
+      visitorTitleLanguage: existing.visitorTitleLanguage,
+      visitorLanguage: existing.visitorLanguage,
+      titleSource: existing.titleSource,
+      translationActivatedAt: existing.translationActivatedAt,
+      translationChargedAt: existing.translationChargedAt,
+      sentiment: existing.sentiment,
+      sentimentConfidence: existing.sentimentConfidence,
+      visitorRating: existing.visitorRating,
+      createdAt: existing.createdAt,
+      updatedAt: DashboardTimestampParser.internetDateTimeString(from: .now),
+      deletedAt: existing.deletedAt,
+      lastMessageAt: existing.lastMessageAt,
+      lastSeenAt: existing.lastSeenAt,
+      escalatedAt: existing.escalatedAt,
+      escalationHandledAt: existing.escalationHandledAt,
+      aiPausedUntil: existing.aiPausedUntil,
+      lastMessageTimelineItem: existing.lastMessageTimelineItem,
+      lastTimelineItem: existing.lastTimelineItem,
+      activeClarification: nil,
+      dashboardLocked: existing.dashboardLocked,
+      dashboardLockReason: existing.dashboardLockReason
+    )
+    return requestID
   }
 
   func applyRealtimeConversationUpdate(_ payload: DashboardRealtimeConversationUpdatedPayload) {
@@ -404,7 +437,7 @@ final class InboxStore {
       sentimentConfidence: payload.updates.sentimentConfidence ?? existing.sentimentConfidence,
       visitorRating: existing.visitorRating,
       createdAt: existing.createdAt,
-      updatedAt: ISO8601DateFormatter.internetDateTime.string(from: .now),
+      updatedAt: DashboardTimestampParser.internetDateTimeString(from: .now),
       deletedAt: existing.deletedAt,
       lastMessageAt: existing.lastMessageAt,
       lastSeenAt: existing.lastSeenAt,
@@ -413,7 +446,7 @@ final class InboxStore {
       aiPausedUntil: payload.updates.aiPausedUntil ?? existing.aiPausedUntil,
       lastMessageTimelineItem: existing.lastMessageTimelineItem,
       lastTimelineItem: existing.lastTimelineItem,
-      activeClarification: payload.updates.activeClarification ?? existing.activeClarification,
+      activeClarification: locallyVisibleClarification(payload.updates.activeClarification ?? existing.activeClarification),
       dashboardLocked: existing.dashboardLocked,
       dashboardLockReason: existing.dashboardLockReason
     )
@@ -463,7 +496,7 @@ final class InboxStore {
       aiPausedUntil: updatedConversation.aiPausedUntil,
       lastMessageTimelineItem: existing.lastMessageTimelineItem,
       lastTimelineItem: existing.lastTimelineItem,
-      activeClarification: existing.activeClarification,
+      activeClarification: locallyVisibleClarification(existing.activeClarification),
       dashboardLocked: existing.dashboardLocked,
       dashboardLockReason: existing.dashboardLockReason
     )
@@ -501,7 +534,10 @@ final class InboxStore {
   }
 
   private func rebuildDerivedState() {
+    let metricsByID = buildConversationMetrics()
+
     filteredConversations = buildFilteredConversations()
+    availableChannelFilters = buildAvailableChannelFilters()
     availableMetadataFilters = buildAvailableMetadataFilters()
 
     var shownConversationsByScope: [InboxScope: [DashboardConversation]] = [:]
@@ -512,14 +548,17 @@ final class InboxStore {
       let visibleConversations = sortConversations(
         inboxScopedConversations(
           in: scope,
-          applySearch: true
-        )
+          applySearch: true,
+          metricsByID: metricsByID
+        ),
+        metricsByID: metricsByID
       )
       shownConversationsByScope[scope] = visibleConversations
       shownConversationCountsByScope[scope] = visibleConversations.count
       totalConversationCountsByScope[scope] = inboxScopedConversations(
         in: scope,
-        applySearch: false
+        applySearch: false,
+        metricsByID: metricsByID
       ).count
     }
 
@@ -554,6 +593,19 @@ final class InboxStore {
     }
   }
 
+  private func buildAvailableChannelFilters() -> [InboxChannelFilterOption] {
+    conversations
+      .map(\.channel)
+      .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+      .reduce(into: Set<String>()) { result, channel in
+        result.insert(channel)
+      }
+      .map(InboxChannelFilterOption.init(value:))
+      .sorted {
+        $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+      }
+  }
+
   private func hasUnreadActivity(_ conversation: DashboardConversation) -> Bool {
     manuallyUnreadConversationIDs.contains(conversation.id) || conversation.hasUnreadActivity
   }
@@ -569,10 +621,8 @@ final class InboxStore {
 
     while loadedPageCount < maxPages, let currentCursor = cursor {
       do {
-        print(
-          "[Inbox] fetch page",
-          "pageIndex=\(loadedPageCount + 1)",
-          "cursor=\(currentCursor)"
+        InboxDiagnostics.log(
+          "[Inbox] fetch page pageIndex=\(loadedPageCount + 1) cursor=\(currentCursor)"
         )
         let page = try await backendClient.conversations.fetchInbox(
           limit: WorkspaceModel.inboxPageSize,
@@ -583,20 +633,13 @@ final class InboxStore {
         let appendedCount = conversations.count - beforeAppend
         loadedPageCount += 1
         cursor = page.nextCursor
-        print(
-          "[Inbox] fetched page",
-          "items=\(page.items.count)",
-          "appended=\(appendedCount)",
-          "visible=\(conversations.count)",
-          "nextCursor=\(cursor ?? "nil")"
+        InboxDiagnostics.log(
+          "[Inbox] fetched page items=\(page.items.count) appended=\(appendedCount) visible=\(conversations.count) nextCursor=\(cursor ?? "nil")"
         )
       } catch {
         terminalError = error
-        print(
-          "[Inbox] fetch page failed",
-          "pageIndex=\(loadedPageCount + 1)",
-          "cursor=\(currentCursor)",
-          "error=\(error.localizedDescription)"
+        InboxDiagnostics.error(
+          "[Inbox] fetch page failed pageIndex=\(loadedPageCount + 1) cursor=\(currentCursor) error=\(error.localizedDescription)"
         )
         break
       }
@@ -612,16 +655,128 @@ final class InboxStore {
     var existingIDs = Set(updatedConversations.map(\.id))
     var appendedCount = 0
     for item in newItems where existingIDs.insert(item.id).inserted {
-      updatedConversations.append(item)
+      updatedConversations.append(applyingLocalClarificationDismissal(to: item))
       appendedCount += 1
     }
 
     conversations = updatedConversations
-    print(
-      "[Inbox] append conversations",
-      "incoming=\(newItems.count)",
-      "appended=\(appendedCount)",
-      "total=\(conversations.count)"
+    InboxDiagnostics.log(
+      "[Inbox] append conversations incoming=\(newItems.count) appended=\(appendedCount) total=\(conversations.count)"
+    )
+  }
+
+  private func buildConversationMetrics() -> [String: ConversationMetrics] {
+    Dictionary(
+      uniqueKeysWithValues: conversations.map { conversation in
+        (conversation.id, conversationMetrics(for: conversation))
+      }
+    )
+  }
+
+  private func conversationMetrics(for conversation: DashboardConversation) -> ConversationMetrics {
+    let createdAtDate = conversation.createdAtDate ?? .distantPast
+    let updatedAtDate = conversation.updatedAtDate
+    let lastMessageAtDate = conversation.lastMessageAtDate
+    let latestActivityDate = lastMessageAtDate ?? updatedAtDate ?? createdAtDate
+    let hasUnreadActivity =
+      manuallyUnreadConversationIDs.contains(conversation.id)
+      || (
+        conversation.hasContent
+          && !conversation.latestMessageWasSentByHumanTeammate
+          && {
+            guard let effectiveSeenDate = conversation.lastSeenAtDate else {
+              return true
+            }
+
+            return latestActivityDate > effectiveSeenDate
+          }()
+      )
+    let sentimentCategory = conversation.sentimentCategory
+
+    return ConversationMetrics(
+      createdAtDate: createdAtDate,
+      latestActivityDate: latestActivityDate,
+      hasUnreadActivity: hasUnreadActivity,
+      priorityRank: conversation.priorityRank,
+      sentimentCategory: sentimentCategory,
+      sentimentSortRank: {
+        switch sentimentCategory {
+        case .negative:
+          3
+        case .neutral:
+          2
+        case .positive:
+          1
+        case .unknown:
+          0
+        }
+      }()
+    )
+  }
+
+  private func metrics(
+    for conversation: DashboardConversation,
+    in metricsByID: [String: ConversationMetrics]
+  ) -> ConversationMetrics {
+    metricsByID[conversation.id] ?? conversationMetrics(for: conversation)
+  }
+
+  private func locallyVisibleClarification(
+    _ clarification: DashboardConversation.Clarification?
+  ) -> DashboardConversation.Clarification? {
+    guard let clarification else { return nil }
+    return locallyDismissedClarificationRequestIDs.contains(clarification.requestId)
+      ? nil
+      : clarification
+  }
+
+  private func applyingLocalClarificationDismissal(
+    to conversation: DashboardConversation
+  ) -> DashboardConversation {
+    guard conversation.activeClarification != locallyVisibleClarification(conversation.activeClarification) else {
+      return conversation
+    }
+
+    return DashboardConversation(
+      id: conversation.id,
+      status: conversation.status,
+      priority: conversation.priority,
+      organizationId: conversation.organizationId,
+      visitorId: conversation.visitorId,
+      visitor: conversation.visitor,
+      websiteId: conversation.websiteId,
+      metadata: conversation.metadata,
+      channel: conversation.channel,
+      title: conversation.title,
+      visitorTitle: conversation.visitorTitle,
+      visitorTitleLanguage: conversation.visitorTitleLanguage,
+      visitorLanguage: conversation.visitorLanguage,
+      titleSource: conversation.titleSource,
+      translationActivatedAt: conversation.translationActivatedAt,
+      translationChargedAt: conversation.translationChargedAt,
+      sentiment: conversation.sentiment,
+      sentimentConfidence: conversation.sentimentConfidence,
+      visitorRating: conversation.visitorRating,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+      deletedAt: conversation.deletedAt,
+      lastMessageAt: conversation.lastMessageAt,
+      lastSeenAt: conversation.lastSeenAt,
+      escalatedAt: conversation.escalatedAt,
+      escalationHandledAt: conversation.escalationHandledAt,
+      aiPausedUntil: conversation.aiPausedUntil,
+      lastMessageTimelineItem: conversation.lastMessageTimelineItem,
+      lastTimelineItem: conversation.lastTimelineItem,
+      activeClarification: nil,
+      dashboardLocked: conversation.dashboardLocked,
+      dashboardLockReason: conversation.dashboardLockReason
+    )
+  }
+
+  private func persistLocallyDismissedClarificationRequestIDs() {
+    defaults.set(
+      locallyDismissedClarificationRequestIDs.sorted(),
+      forKey: DefaultsKey.locallyDismissedClarificationRequestIDs
     )
   }
 
@@ -682,5 +837,108 @@ final class InboxStore {
     }
 
     return trimmed
+  }
+}
+
+private extension InboxStore {
+  private func sortConversations(
+    _ scopedConversations: [DashboardConversation],
+    metricsByID: [String: ConversationMetrics]
+  ) -> [DashboardConversation] {
+    scopedConversations.sorted { lhs, rhs in
+      let lhsMetrics = metrics(for: lhs, in: metricsByID)
+      let rhsMetrics = metrics(for: rhs, in: metricsByID)
+
+      switch sortMode {
+      case .latestActivity:
+        if lhsMetrics.latestActivityDate != rhsMetrics.latestActivityDate {
+          return lhsMetrics.latestActivityDate > rhsMetrics.latestActivityDate
+        }
+
+        return lhsMetrics.createdAtDate > rhsMetrics.createdAtDate
+      case .priority:
+        if lhsMetrics.priorityRank != rhsMetrics.priorityRank {
+          return lhsMetrics.priorityRank > rhsMetrics.priorityRank
+        }
+
+        return lhsMetrics.latestActivityDate > rhsMetrics.latestActivityDate
+      case .sentiment:
+        if lhsMetrics.sentimentSortRank != rhsMetrics.sentimentSortRank {
+          return lhsMetrics.sentimentSortRank > rhsMetrics.sentimentSortRank
+        }
+
+        return lhsMetrics.latestActivityDate > rhsMetrics.latestActivityDate
+      case .createdAt:
+        if lhsMetrics.createdAtDate != rhsMetrics.createdAtDate {
+          return lhsMetrics.createdAtDate > rhsMetrics.createdAtDate
+        }
+
+        return lhsMetrics.latestActivityDate > rhsMetrics.latestActivityDate
+      }
+    }
+  }
+
+  private func inboxScopedConversations(
+    in scope: InboxScope,
+    applySearch: Bool,
+    metricsByID: [String: ConversationMetrics]
+  ) -> [DashboardConversation] {
+    let searchableConversations = applySearch ? filteredConversations : conversations
+
+    return searchableConversations.filter { conversation in
+      let metrics = metrics(for: conversation, in: metricsByID)
+      return conversationMatchesScope(conversation, scope: scope, metrics: metrics)
+        && priorityFilter.includes(conversation.priority)
+        && sentimentFilter.includes(metrics.sentimentCategory)
+        && conversationMatchesChannelFilter(conversation)
+        && conversationMatchesMetadataFilters(conversation)
+        && (!hideSeenConversations || metrics.hasUnreadActivity)
+        && (!onlyPreviouslyOpenedConversations || conversation.lastSeenAtDate != nil)
+        && (!hideEmptyConversations || conversation.hasContent)
+    }
+  }
+
+  private func conversationMatchesScope(
+    _ conversation: DashboardConversation,
+    scope: InboxScope,
+    metrics: ConversationMetrics
+  ) -> Bool {
+    switch scope {
+    case .all:
+      return !conversation.isArchived
+    case .unseen:
+      return !conversation.isArchived && metrics.hasUnreadActivity
+    case .updated:
+      return !conversation.isArchived && conversation.hasUpdatesSinceLastSeen
+    case .open:
+      return !conversation.isArchived && conversation.status == .open
+    case .humanIntervention:
+      return !conversation.isArchived && conversation.needsHumanIntervention
+    case .clarification:
+      return !conversation.isArchived && conversation.needsClarification
+    case .resolved:
+      return !conversation.isArchived && conversation.status == .resolved
+    case .spam:
+      return !conversation.isArchived && conversation.status == .spam
+    case .archived:
+      return conversation.isArchived
+    }
+  }
+}
+
+private enum InboxDiagnostics {
+  private static let logger = Logger(
+    subsystem: "com.cossistant.admin",
+    category: "Inbox"
+  )
+
+  static func log(_ message: @autoclosure () -> String) {
+    let line = message()
+    logger.debug("\(line, privacy: .public)")
+  }
+
+  static func error(_ message: @autoclosure () -> String) {
+    let line = message()
+    logger.error("\(line, privacy: .public)")
   }
 }
