@@ -95,7 +95,7 @@ extension WorkspaceModel {
 
       autoResolveResults[updatedIndex].isMarkingSeen = false
       autoResolveResults[updatedIndex].isSeen = true
-      autoResolveResults[updatedIndex].decisionNote = "Marked as seen from the Auto-Resolve results."
+      autoResolveResults[updatedIndex].decisionNote = "Marked as read from the Auto-Resolve results."
     } catch {
       errorMessage = error.localizedDescription
 
@@ -104,7 +104,76 @@ extension WorkspaceModel {
       }
 
       autoResolveResults[updatedIndex].isMarkingSeen = false
-      autoResolveResults[updatedIndex].decisionNote = "Mark as seen failed: \(error.localizedDescription)"
+      autoResolveResults[updatedIndex].decisionNote = "Mark as read failed: \(error.localizedDescription)"
+    }
+  }
+
+  func markAutoResolveResultUnread(_ conversationID: DashboardConversation.ID) async {
+    guard let index = autoResolveResults.firstIndex(where: { $0.conversationID == conversationID }) else {
+      return
+    }
+
+    autoResolveResults[index].isMarkingSeen = true
+
+    do {
+      manuallyUnreadConversationIDs.insert(conversationID)
+      setConversationLastSeenAt(conversationID: conversationID, lastSeenAt: nil)
+
+      let updatedConversation = try await backendClient.conversations.markConversationUnread(
+        conversationID: conversationID
+      )
+      applyMutatedConversation(
+        updatedConversation,
+        preserveExistingLastMessageAt: true,
+        preserveExistingLastSeenAt: false
+      )
+
+      if selectedConversationID == conversationID {
+        let seenData = try await backendClient.conversations.fetchConversationSeenData(
+          conversationID: conversationID
+        )
+        selectedSeenData = seenData
+        syncConversationSeenState(
+          conversationID: conversationID,
+          with: seenData,
+          fallbackCurrentActorSeenAt: nil
+        )
+      }
+
+      guard let updatedIndex = autoResolveResults.firstIndex(where: { $0.conversationID == conversationID }) else {
+        return
+      }
+
+      autoResolveResults[updatedIndex].isMarkingSeen = false
+      autoResolveResults[updatedIndex].isSeen = false
+      autoResolveResults[updatedIndex].decisionNote = "Marked as unread from the Auto-Resolve results."
+    } catch {
+      errorMessage = error.localizedDescription
+
+      guard let updatedIndex = autoResolveResults.firstIndex(where: { $0.conversationID == conversationID }) else {
+        return
+      }
+
+      autoResolveResults[updatedIndex].isMarkingSeen = false
+      autoResolveResults[updatedIndex].decisionNote = "Mark as unread failed: \(error.localizedDescription)"
+    }
+  }
+
+  func markAllUnreadAutoResolveResultsSeen() async {
+    var seenConversationIDs = Set<DashboardConversation.ID>()
+    let conversationIDs = autoResolveResults.compactMap { result -> DashboardConversation.ID? in
+      guard !result.isSeen,
+            !seenConversationIDs.contains(result.conversationID) else {
+        return nil
+      }
+
+      seenConversationIDs.insert(result.conversationID)
+      return result.conversationID
+    }
+
+    for conversationID in conversationIDs {
+      guard !Task.isCancelled else { return }
+      await markAutoResolveResultSeen(conversationID)
     }
   }
 }

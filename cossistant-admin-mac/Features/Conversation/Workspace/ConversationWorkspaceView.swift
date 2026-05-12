@@ -9,7 +9,7 @@ enum ConversationWorkspaceLayout {
   static let inspectorIdealWidth: CGFloat = 320
   static let inspectorMaxWidth: CGFloat = 360
   static let panePadding: CGFloat = 24
-  static let cardCornerRadius: CGFloat = 20
+  static let cardCornerRadius: CGFloat = 12
 }
 
 struct ConversationWorkspaceView: View {
@@ -34,6 +34,7 @@ struct ConversationWorkspaceView: View {
   let translatedClarification: DashboardMessageTranslation?
   let loadState: ConversationSelectionLoadState
   let timelinePresentation: DashboardTimelinePresentationBundle?
+  let onViewContact: (String) -> Void
 
   var body: some View {
     Group {
@@ -89,7 +90,8 @@ struct ConversationWorkspaceView: View {
       realtimeConnectionState: realtimeConnectionState,
       showDeveloperLogs: showDeveloperLogs,
       seenDebugState: seenDebugState,
-      onUpdateConversationMetadata: actions.updateConversationMetadata
+      onUpdateConversationMetadata: actions.updateConversationMetadata,
+      onViewContact: onViewContact
     )
     .frame(
       minWidth: ConversationWorkspaceLayout.inspectorMinWidth,
@@ -134,6 +136,7 @@ private struct ConversationThreadWorkspaceColumn: View {
         onToggleDeveloperLogs: actions.setShowDeveloperLogs,
         canUseMessageTranslations: controls.canUseMessageTranslations,
         showTranslations: controls.showTranslations,
+        showBackendTranslatedSubjects: controls.showBackendTranslatedSubjects,
         onToggleTranslations: actions.setShowTranslations,
         isTranslatingMessages: controls.isTranslatingMessages,
         translationErrorMessage: controls.translationErrorMessage,
@@ -216,12 +219,23 @@ private struct ConversationThreadWorkspaceColumn: View {
       ConversationFAQPickerSheet(
         availableAIAgents: website?.availableAIAgents ?? [],
         loadFAQs: actions.loadFAQsForConversation,
-        onResolveFAQ: actions.generateReplyFromFAQ,
-        onApplyDraft: { generatedDraft in
-          actions.setComposerVisibility(.public)
-          actions.setComposerDraftText(generatedDraft)
+        onSelectFAQ: { faq in
+          startFAQReplyDraft(from: faq)
         }
       )
+    }
+  }
+
+  private func startFAQReplyDraft(from faq: DashboardKnowledge) {
+    let conversationID = conversation.id
+    actions.setComposerVisibility(.public)
+
+    Task {
+      guard let generatedDraft = await actions.generateReplyFromFAQ(faq, conversationID) else {
+        return
+      }
+
+      actions.setComposerDraftText(generatedDraft)
     }
   }
 }
@@ -266,33 +280,35 @@ private struct ConversationFAQPickerSheet: View {
   @Environment(\.dismiss) private var dismiss
 
   let availableAIAgents: [DashboardWebsite.AIAgent]
-  let loadFAQs: @MainActor @Sendable (String?) async throws -> [DashboardKnowledge]
-  let onResolveFAQ: @MainActor @Sendable (DashboardKnowledge) async -> String?
-  let onApplyDraft: @MainActor @Sendable (String) -> Void
+  let loadFAQs: @MainActor @Sendable (String?, Bool) async throws -> [DashboardKnowledge]
+  let onSelectFAQ: @MainActor @Sendable (DashboardKnowledge) -> Void
 
   @State private var selectedAIAgentID: String?
   @State private var searchText = ""
   @State private var items: [DashboardKnowledge] = []
-  @State private var isLoading = false
+  @State private var loadingAIAgentID: String?
+  @State private var loadedAIAgentID: String?
   @State private var errorMessage: String?
-  @State private var resolvingFAQID: String?
 
   private var filteredItems: [DashboardKnowledge] {
     let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !query.isEmpty else { return items }
 
-    return items.filter { item in
-      let payload = item.faqPayload
-      let haystacks = [
-        item.titleText,
-        payload?.question ?? "",
-        payload?.answer ?? "",
-        payload?.categories.joined(separator: ", ") ?? "",
-        payload?.relatedQuestions.joined(separator: " ") ?? "",
-      ]
-
-      return haystacks.contains { $0.localizedCaseInsensitiveContains(query) }
+    return items.filter {
+      $0.titleText.localizedCaseInsensitiveContains(query)
     }
+  }
+
+  private var isLoading: Bool {
+    loadingAIAgentID != nil
+  }
+
+  private var isInitialLoad: Bool {
+    isLoading && loadedAIAgentID != selectedAIAgentID
+  }
+
+  private var isWaitingForInitialAgentSelection: Bool {
+    selectedAIAgentID == nil && !availableAIAgents.isEmpty
   }
 
   var body: some View {
@@ -322,7 +338,7 @@ private struct ConversationFAQPickerSheet: View {
               .frame(maxWidth: .infinity, alignment: .leading)
           }
 
-          if isLoading, items.isEmpty {
+          if isWaitingForInitialAgentSelection || isInitialLoad {
             ProgressView("Loading FAQs…")
               .frame(maxWidth: .infinity, maxHeight: .infinity)
           } else if filteredItems.isEmpty {
@@ -335,14 +351,13 @@ private struct ConversationFAQPickerSheet: View {
           } else {
             List(filteredItems) { item in
               Button {
-                Task {
-                  await resolve(with: item)
-                }
+                dismiss()
+                onSelectFAQ(item)
               } label: {
                 FAQSelectionRow(item: item)
               }
               .buttonStyle(.plain)
-              .disabled(resolvingFAQID != nil)
+              .disabled(isLoading)
             }
             .listStyle(.inset)
           }
@@ -358,13 +373,24 @@ private struct ConversationFAQPickerSheet: View {
         }
 
         ToolbarItem(placement: .automatic) {
-          if isLoading || resolvingFAQID != nil {
+          if isLoading {
             ProgressView()
           }
         }
+
+        ToolbarItem(placement: .primaryAction) {
+          Button {
+            Task {
+              await loadItems(forceRefresh: true)
+            }
+          } label: {
+            Label("Refresh", systemSymbol: .arrowClockwise)
+          }
+          .disabled(isLoading || selectedAIAgentID == nil)
+        }
       }
     }
-    .searchable(text: $searchText, prompt: "Search FAQ entries")
+    .searchable(text: $searchText, prompt: "Search FAQ titles")
     .frame(minWidth: 560, minHeight: 520)
     .onAppear {
       if selectedAIAgentID == nil {
@@ -377,33 +403,49 @@ private struct ConversationFAQPickerSheet: View {
   }
 
   @MainActor
-  private func loadItems() async {
+  private func loadItems(forceRefresh: Bool = false) async {
     guard let selectedAIAgentID else {
       items = []
+      loadedAIAgentID = nil
       return
     }
 
-    isLoading = true
+    loadingAIAgentID = selectedAIAgentID
     errorMessage = nil
-    defer { isLoading = false }
+    if loadedAIAgentID != selectedAIAgentID {
+      items = []
+    }
+    defer {
+      if loadingAIAgentID == selectedAIAgentID {
+        loadingAIAgentID = nil
+      }
+    }
 
     do {
-      items = try await loadFAQs(selectedAIAgentID)
+      let loadedItems = try await loadFAQs(selectedAIAgentID, forceRefresh)
+      guard !Task.isCancelled else { return }
+      items = loadedItems
+      loadedAIAgentID = selectedAIAgentID
     } catch {
-      items = []
+      guard !Self.isCancellation(error) else { return }
+      if loadedAIAgentID != selectedAIAgentID {
+        items = []
+      }
       errorMessage = error.localizedDescription
     }
   }
 
-  @MainActor
-  private func resolve(with item: DashboardKnowledge) async {
-    resolvingFAQID = item.id
-    defer { resolvingFAQID = nil }
+  private static func isCancellation(_ error: any Error) -> Bool {
+    if error is CancellationError {
+      return true
+    }
 
-    guard let generatedDraft = await onResolveFAQ(item) else { return }
+    if let urlError = error as? URLError, urlError.code == .cancelled {
+      return true
+    }
 
-    onApplyDraft(generatedDraft)
-    dismiss()
+    let nsError = error as NSError
+    return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
   }
 }
 

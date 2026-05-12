@@ -4,7 +4,7 @@ import CossistantAdmin
 
 @Observable @MainActor
 final class WorkspaceStore {
-  var selectedRoute: WorkspaceRoute? = .inbox(.open)
+  var selectedRoute: WorkspaceRoute? = .inbox(.humanIntervention)
   var selectedContactID: String?
   var selectedKnowledgeID: String?
   var selectedAIAgentID: String?
@@ -12,6 +12,6 @@ final class WorkspaceStore {
   var autoSeenConversationIDInFlight: String?
 
   var activeRoute: WorkspaceRoute {
-    selectedRoute ?? .inbox(.open)
+    selectedRoute ?? .inbox(.humanIntervention)
   }
 }

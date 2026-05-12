@@ -29,16 +29,9 @@ struct WorkspaceSidebarView: View {
 
         Section("Inboxes") {
           ForEach(InboxScope.allCases) { scope in
-            Label {
-              HStack {
-                Text(scope.title)
-                Spacer()
-                Text(inboxStore.conversationCount(for: scope), format: .number)
-                  .foregroundStyle(.secondary)
-              }
-            } icon: {
-              Image(systemSymbol: scope.systemSymbol)
-            }
+            Label(scope.title, systemSymbol: scope.systemSymbol)
+              .lineLimit(1)
+              .badge(inboxStore.sidebarConversationCount(for: scope))
             .tag(WorkspaceRoute.inbox(scope))
           }
         }
@@ -52,6 +45,8 @@ struct WorkspaceSidebarView: View {
             .tag(WorkspaceRoute.knowledge)
           Label("FAQ", systemSymbol: .questionmarkBubble)
             .tag(WorkspaceRoute.faq)
+          Label("Settings", systemSymbol: .gearshape)
+            .tag(WorkspaceRoute.settings)
         }
 
         Section("AI Tools") {
@@ -61,6 +56,8 @@ struct WorkspaceSidebarView: View {
             .tag(WorkspaceRoute.aiSummarize)
           Label("Auto-Resolve", systemSymbol: .sparkles)
             .tag(WorkspaceRoute.aiAutoResolve)
+          Label("FAQ Resolver", systemSymbol: .questionmarkBubble)
+            .tag(WorkspaceRoute.aiFAQResolver)
         }
       }
       .listStyle(.sidebar)
@@ -90,6 +87,7 @@ private struct WorkspaceSidebarFooter: View {
         Label(title, systemSymbol: symbol)
           .font(.caption.weight(.semibold))
           .foregroundStyle(tint)
+          .lineLimit(1)
 
         Spacer(minLength: 8)
 
@@ -124,7 +122,8 @@ private struct WorkspaceSidebarFooter: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 14)
     .padding(.vertical, 10)
-    .background(.regularMaterial)
+    .background(.bar)
+    .controlSize(.small)
   }
 
   private var title: String {

@@ -2,7 +2,7 @@ import SwiftUI
 import SFSafeSymbols
 import CossistantAdmin
 
-struct AutoResolveConversationInspectorView: View {
+struct FAQResolverConversationInspectorView: View {
   let conversation: DashboardConversation?
   let visitor: DashboardVisitor?
   let timelineItems: [DashboardTimelineItem]
@@ -16,6 +16,11 @@ struct AutoResolveConversationInspectorView: View {
   let loadState: ConversationSelectionLoadState
   let canLoadMoreTimeline: Bool
   let isLoadingMoreTimeline: Bool
+  let onOpenConversation: (String) -> Void
+  let onMarkSeen: (String) async -> Void
+  let onMarkUnseen: (String) async -> Void
+  let onResolveConversation: (String) async -> Void
+  let onReopenConversation: (String) async -> Void
   let onSetShowTranslations: (Bool) async -> Void
   let onLoadMoreTimeline: () -> Void
 
@@ -32,7 +37,7 @@ struct AutoResolveConversationInspectorView: View {
       Divider()
 
       threadContent
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .background(.thinMaterial)
   }
@@ -46,7 +51,7 @@ struct AutoResolveConversationInspectorView: View {
           ProgressView()
             .controlSize(.large)
 
-          Text("Loading conversation messages…")
+          Text("Loading conversation messages...")
             .font(.title3.weight(.medium))
             .foregroundStyle(.secondary)
         }
@@ -79,9 +84,9 @@ struct AutoResolveConversationInspectorView: View {
       }
     } else {
       ContentUnavailableView(
-        "Select a result",
+        "Select a conversation",
         systemImage: SFSymbol.bubbleLeftAndBubbleRight.rawValue,
-        description: Text("Pick an auto-resolve result to inspect its conversation messages here.")
+        description: Text("Pick an eligible conversation to inspect its messages here.")
       )
     }
   }
@@ -154,11 +159,71 @@ struct AutoResolveConversationInspectorView: View {
             )
           }
         }
+
+        actionButtons(for: conversation)
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 20)
     .padding(.vertical, 16)
+  }
+
+  private func actionButtons(for conversation: DashboardConversation) -> some View {
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 8) {
+        inspectorButtons(for: conversation)
+      }
+
+      VStack(alignment: .leading, spacing: 8) {
+        inspectorButtons(for: conversation)
+      }
+    }
+    .controlSize(.small)
+  }
+
+  @ViewBuilder
+  private func inspectorButtons(for conversation: DashboardConversation) -> some View {
+    Button {
+      onOpenConversation(conversation.id)
+    } label: {
+      Label("Open Conversation", systemSymbol: .arrowUpRightSquare)
+    }
+
+    if conversation.hasUnreadActivity {
+      Button {
+        Task {
+          await onMarkSeen(conversation.id)
+        }
+      } label: {
+        Label("Set Seen", systemSymbol: .checkmarkCircle)
+      }
+    } else {
+      Button {
+        Task {
+          await onMarkUnseen(conversation.id)
+        }
+      } label: {
+        Label("Set Unseen", systemSymbol: .eyeSlash)
+      }
+    }
+
+    if conversation.status == .open {
+      Button {
+        Task {
+          await onResolveConversation(conversation.id)
+        }
+      } label: {
+        Label("Resolve", systemSymbol: .checkmark)
+      }
+    } else if conversation.status == .resolved {
+      Button {
+        Task {
+          await onReopenConversation(conversation.id)
+        }
+      } label: {
+        Label("Re-open", systemSymbol: .arrowCounterclockwise)
+      }
+    }
   }
 
   private var headerSubtitle: String {

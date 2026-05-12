@@ -6,6 +6,8 @@ struct InboxConversationRow: View {
   @Bindable var model: WorkspaceModel
   let conversation: DashboardConversation
   let visitorPresence: DashboardVisitorPresence?
+  let showsMetadataSummaryPreviews: Bool
+  let showBackendTranslatedSubjects: Bool
 
   private enum LivePreview {
     case visitorTyping(String?)
@@ -51,18 +53,7 @@ struct InboxConversationRow: View {
     let hasUnreadActivity = model.conversationHasUnreadActivity(conversation)
 
     HStack(alignment: .top, spacing: 12) {
-      AvatarView(
-        name: conversation.visitorDisplayName,
-        imageURL: conversation.visitorAvatarURL,
-        seed: conversation.visitorAvatarSeed,
-        showsActivePresence: visitorPresence?.isActive == true
-      )
-      .overlay {
-        if let statusOutlineTint {
-          Circle()
-            .strokeBorder(statusOutlineTint, lineWidth: 2)
-        }
-      }
+      avatar
 
       VStack(alignment: .leading, spacing: 8) {
         HStack(alignment: .top, spacing: 8) {
@@ -79,12 +70,7 @@ struct InboxConversationRow: View {
                 .lineLimit(1)
             }
 
-            HStack(spacing: 6) {
-              Text(conversation.displayTitle)
-                .font(.subheadline.weight(hasUnreadActivity ? .medium : .regular))
-                .foregroundStyle(hasUnreadActivity ? .primary : .secondary)
-                .lineLimit(1)
-
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
               if conversation.hasUpdatesSinceLastSeen {
                 Image(systemSymbol: .clockArrowTriangleheadCounterclockwiseRotate90)
                   .font(.caption.weight(.semibold))
@@ -92,20 +78,12 @@ struct InboxConversationRow: View {
                   .help("New messages since you last viewed this conversation")
               }
 
-              if let priorityIndicatorSymbol = conversation.priorityIndicatorSymbol {
-                Image(systemSymbol: priorityIndicatorSymbol)
-                  .font(.caption.weight(.semibold))
-                  .foregroundStyle(conversation.priorityIndicatorTint)
-              }
-
-              if let platformIndicatorSymbol = conversation.platformIndicatorSymbol,
-                 let platformIndicatorLabel = conversation.platformIndicatorLabel {
-                Image(systemSymbol: platformIndicatorSymbol)
-                  .font(.caption.weight(.semibold))
-                  .foregroundStyle(conversation.platformIndicatorTint)
-                  .accessibilityLabel(platformIndicatorLabel)
-                  .help(platformIndicatorLabel)
-              }
+              Text(titleOrSummaryText)
+                .font(.subheadline.weight(hasUnreadActivity ? .medium : .regular))
+                .foregroundStyle(hasUnreadActivity ? .primary : .secondary)
+                .lineLimit(summaryPreviewText == nil ? 1 : nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
             }
           }
 
@@ -126,30 +104,31 @@ struct InboxConversationRow: View {
           }
         }
 
-        previewLine
+        if summaryPreviewText == nil || livePreview != nil {
+          previewLine
+        }
 
-        if conversation.needsHumanIntervention
-          || conversation.needsClarification
-          || conversation.showsAttentionWaitingBadge
-          || conversation.sentimentCategory != .unknown {
-          HStack(spacing: 6) {
-            if conversation.needsHumanIntervention {
-              RowTag(title: "Human intervention", systemSymbol: .personFillBadgePlus, tint: .orange)
-            } else if conversation.needsClarification {
-              RowTag(title: "Clarification", systemSymbol: .questionmarkBubbleFill, tint: .indigo)
-            }
+        if let teamActionNeededPreviewText {
+          Text("Needs team: \(teamActionNeededPreviewText)")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.red)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+        }
 
-            if let waitingLabel = conversation.attentionWaitingLabel {
-              RowTag(
-                title: waitingLabel,
-                systemSymbol: .clock,
-                tint: conversation.attentionWaitingTint
-              )
-            }
+        HStack(spacing: 6) {
+          InboxPriorityChip(priority: conversation.priority)
 
-            if conversation.sentimentCategory != .unknown {
-              RowTag(title: conversation.sentimentCategory.label, tint: sentimentTint)
-            }
+          if conversation.needsHumanIntervention {
+            RowTag(title: "Human intervention", systemSymbol: .personFillBadgePlus, tint: .orange)
+          }
+
+          if let waitingLabel = conversation.visitorWaitingLabel {
+            RowTag(
+              title: waitingLabel,
+              systemSymbol: .clock,
+              tint: conversation.visitorWaitingTint
+            )
           }
         }
       }
@@ -283,6 +262,48 @@ struct InboxConversationRow: View {
       .joined(separator: " ")
   }
 
+  private var summaryPreviewText: String? {
+    guard showsMetadataSummaryPreviews else { return nil }
+    return conversation.inboxMetadataSummaryPreviewText
+  }
+
+  private var teamActionNeededPreviewText: String? {
+    conversation.teamActionNeededPreviewText
+  }
+
+  private var titleOrSummaryText: String {
+    summaryPreviewText ?? conversation.displayTitle(showBackendTranslatedSubjects: showBackendTranslatedSubjects)
+  }
+
+  private var avatar: some View {
+    VStack(spacing: 6) {
+      AvatarView(
+        name: conversation.visitorDisplayName,
+        imageURL: conversation.visitorAvatarURL,
+        seed: conversation.visitorAvatarSeed,
+        size: 44,
+        showsActivePresence: visitorPresence?.isActive == true
+      )
+      .overlay {
+        if let statusOutlineTint {
+          Circle()
+            .strokeBorder(statusOutlineTint, lineWidth: 2)
+        }
+      }
+
+      if let platformIndicatorSymbol = conversation.platformIndicatorSymbol,
+         let platformIndicatorLabel = conversation.platformIndicatorLabel {
+        InboxPlatformChip(
+          systemSymbol: platformIndicatorSymbol,
+          version: conversation.appVersionIndicatorText,
+          tint: conversation.platformIndicatorTint,
+          accessibilityLabel: platformIndicatorLabel
+        )
+      }
+    }
+    .frame(width: 48)
+  }
+
   @ViewBuilder
   private var previewLine: some View {
     if let livePreview {
@@ -344,19 +365,6 @@ struct InboxConversationRow: View {
     }
   }
 
-  private var sentimentTint: Color {
-    switch conversation.sentimentCategory {
-    case .positive:
-      .green
-    case .neutral:
-      .secondary
-    case .negative:
-      .red
-    case .unknown:
-      .secondary
-    }
-  }
-
   private func rowTimestamp(title: String, value: String, emphasized: Bool) -> some View {
     HStack(spacing: 4) {
       Text(title)
@@ -366,6 +374,77 @@ struct InboxConversationRow: View {
       Text(value)
         .font(emphasized ? .caption.weight(.medium) : .caption2)
         .foregroundStyle(emphasized ? .secondary : .tertiary)
+    }
+  }
+}
+
+private struct InboxPlatformChip: View {
+  let systemSymbol: SFSymbol
+  let version: String?
+  let tint: Color
+  let accessibilityLabel: String
+
+  var body: some View {
+    HStack(spacing: 2) {
+      Image(systemSymbol: systemSymbol)
+        .font(.system(size: 7, weight: .bold))
+
+      if let version {
+        Text(version)
+          .font(.system(size: 8, weight: .semibold, design: .rounded).monospacedDigit())
+          .fixedSize(horizontal: true, vertical: true)
+          .multilineTextAlignment(.center)
+      }
+    }
+    .padding(.horizontal, version == nil ? 4 : 5)
+    .padding(.vertical, 2)
+    .background(tint.opacity(0.10), in: .capsule)
+    .foregroundStyle(tint.opacity(0.86))
+    .opacity(0.86)
+    .fixedSize(horizontal: true, vertical: true)
+    .accessibilityLabel(platformAccessibilityLabel)
+    .help(platformAccessibilityLabel)
+  }
+
+  private var platformAccessibilityLabel: String {
+    if let version {
+      return "\(accessibilityLabel) \(version)"
+    }
+
+    return accessibilityLabel
+  }
+}
+
+private struct InboxPriorityChip: View {
+  let priority: DashboardConversation.Priority
+
+  private let barCount = 4
+
+  var body: some View {
+    HStack(alignment: .bottom, spacing: 2) {
+      ForEach(1...barCount, id: \.self) { index in
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+          .fill(index <= priorityVisualRank ? priority.tint : Color.secondary.opacity(0.2))
+          .frame(width: 3, height: CGFloat(index * 2 + 4))
+      }
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, 5)
+    .background(priority.tint.opacity(0.12), in: .capsule)
+    .accessibilityLabel("Priority \(priority.label)")
+    .help("Priority \(priority.label)")
+  }
+
+  private var priorityVisualRank: Int {
+    switch priority {
+    case .low:
+      return 1
+    case .normal:
+      return 2
+    case .high:
+      return 3
+    case .urgent:
+      return 4
     }
   }
 }

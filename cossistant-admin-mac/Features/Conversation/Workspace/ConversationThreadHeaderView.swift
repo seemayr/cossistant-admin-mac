@@ -12,6 +12,7 @@ struct ConversationThreadHeaderView: View {
   let onToggleDeveloperLogs: (Bool) -> Void
   let canUseMessageTranslations: Bool
   let showTranslations: Bool
+  let showBackendTranslatedSubjects: Bool
   let onToggleTranslations: (Bool) -> Void
   let isTranslatingMessages: Bool
   let translationErrorMessage: String?
@@ -59,7 +60,7 @@ struct ConversationThreadHeaderView: View {
           .lineLimit(1)
 
         HStack(spacing: 8) {
-          Text(detail?.title ?? conversation.displayTitle)
+          Text(displayedConversationTitle)
             .font(.headline)
             .foregroundStyle(.secondary)
             .lineLimit(1)
@@ -134,7 +135,8 @@ struct ConversationThreadHeaderView: View {
               .font(.body.weight(.semibold))
           }
           .buttonStyle(.borderless)
-          .help(hasUnreadActivity ? "Mark as seen" : "Mark as unseen")
+          .accessibilityLabel(seenActionHint)
+          .help(seenActionHint)
 
           Button {
             Task {
@@ -149,7 +151,8 @@ struct ConversationThreadHeaderView: View {
               .font(.body.weight(.semibold))
           }
           .buttonStyle(.borderless)
-          .help(conversation.aiPausedUntil == nil ? "Pause AI until further notice" : "Resume AI answers")
+          .accessibilityLabel(aiPauseActionHint)
+          .help(aiPauseActionHint)
 
           if conversation.status != .spam, !conversation.isArchived {
             Button {
@@ -165,7 +168,8 @@ struct ConversationThreadHeaderView: View {
                 .font(.body.weight(.semibold))
             }
             .buttonStyle(.borderless)
-            .help(conversation.status == .resolved ? "Reopen conversation" : "Resolve conversation")
+            .accessibilityLabel(resolveActionHint)
+            .help(resolveActionHint)
           }
 
           Menu {
@@ -326,6 +330,7 @@ struct ConversationThreadHeaderView: View {
               .font(.caption.weight(.medium))
           }
           .menuStyle(.borderlessButton)
+          .help("More conversation actions")
         }
 
         if canUseMessageTranslations || showTranslations || translationErrorMessage != nil {
@@ -339,7 +344,7 @@ struct ConversationThreadHeaderView: View {
           }
           .toggleStyle(.switch)
           .controlSize(.small)
-          .help(isTranslatingMessages ? "Translating messages" : "Show translations")
+          .help(translationActionHint)
         }
       }
       .fixedSize()
@@ -354,6 +359,37 @@ struct ConversationThreadHeaderView: View {
         }
       )
     }
+  }
+
+  private var seenActionHint: String {
+    hasUnreadActivity ? "Mark this conversation as seen" : "Mark this conversation as unseen"
+  }
+
+  private var aiPauseActionHint: String {
+    conversation.aiPausedUntil == nil
+      ? "Pause AI replies for this conversation"
+      : "Resume AI replies for this conversation"
+  }
+
+  private var resolveActionHint: String {
+    conversation.status == .resolved
+      ? "Reopen this conversation"
+      : "Resolve this conversation"
+  }
+
+  private var translationActionHint: String {
+    if isTranslatingMessages {
+      return "Translating conversation messages"
+    }
+
+    return showTranslations ? "Hide translations" : "Show translations"
+  }
+
+  private var displayedConversationTitle: String {
+    detail?.displayTitle(
+      fallback: conversation,
+      showBackendTranslatedSubjects: showBackendTranslatedSubjects
+    ) ?? conversation.displayTitle(showBackendTranslatedSubjects: showBackendTranslatedSubjects)
   }
 
   @ViewBuilder

@@ -12,7 +12,7 @@ enum AIWorkflowFormatting {
     }
 
     if item.aiAgentId != nil {
-      return "Agent"
+      return "AI Agent"
     }
 
     return "System"

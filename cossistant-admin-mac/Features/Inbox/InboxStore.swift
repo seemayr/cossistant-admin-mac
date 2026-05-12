@@ -21,15 +21,15 @@ final class InboxStore {
   private var configuration: DashboardConfiguration?
   private let defaults: UserDefaults
   private var inboxPrefetchTask: Task<Void, Never>?
-  private var metadataHydrationTask: Task<Void, Never>?
   private var locallyDismissedClarificationRequestIDs: Set<String>
+  private var workspaceChannelFilter: String?
 
   var searchText = "" {
     didSet {
       rebuildDerivedState()
     }
   }
-  var sortMode: InboxSortMode = .latestActivity {
+  var sortMode: InboxSortMode = .priority {
     didSet {
       rebuildDerivedState()
     }
@@ -44,7 +44,17 @@ final class InboxStore {
       rebuildDerivedState()
     }
   }
+  var faqResolverHandlingFilter: InboxFAQResolverHandlingFilter = .all {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
   var channelFilter: String? {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var appVersionFilters: Set<String> = [] {
     didSet {
       rebuildDerivedState()
     }
@@ -69,6 +79,12 @@ final class InboxStore {
       rebuildDerivedState()
     }
   }
+  var onlyTeamActionNeededConversations = false {
+    didSet {
+      rebuildDerivedState()
+    }
+  }
+  var showsMetadataSummaryPreviews = false
   var conversations: [DashboardConversation] = [] {
     didSet {
       rebuildDerivedState()
@@ -77,18 +93,15 @@ final class InboxStore {
   var nextCursor: String?
   var loadedPageCount = 0
   var isLoadingMore = false
-  var visitorSearchIndex: [String: String] = [:] {
-    didSet {
-      rebuildDerivedState()
-    }
-  }
   private var manuallyUnreadConversationIDs: Set<String> = []
   private(set) var filteredConversations: [DashboardConversation] = []
   private(set) var availableChannelFilters: [InboxChannelFilterOption] = []
+  private(set) var availableAppVersionFilters: [InboxAppVersionFilterOption] = []
   private(set) var availableMetadataFilters: [InboxMetadataFilterSection] = []
   private var shownConversationsByScope: [InboxScope: [DashboardConversation]] = [:]
   private var shownConversationCountsByScope: [InboxScope: Int] = [:]
   private var totalConversationCountsByScope: [InboxScope: Int] = [:]
+  private var sidebarConversationCountsByScope: [InboxScope: Int] = [:]
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
@@ -103,21 +116,24 @@ final class InboxStore {
 
   func reset() {
     inboxPrefetchTask?.cancel()
-    metadataHydrationTask?.cancel()
     searchText = ""
-    sortMode = .latestActivity
+    sortMode = .priority
     priorityFilter = .all
     sentimentFilter = .all
+    faqResolverHandlingFilter = .all
     channelFilter = nil
+    workspaceChannelFilter = nil
+    appVersionFilters = []
     metadataFilters = [:]
     hideEmptyConversations = true
     hideSeenConversations = false
     onlyPreviouslyOpenedConversations = false
+    onlyTeamActionNeededConversations = false
+    showsMetadataSummaryPreviews = false
     conversations = []
     nextCursor = nil
     loadedPageCount = 0
     isLoadingMore = false
-    visitorSearchIndex = [:]
   }
 
   func applyBootstrap(_ page: DashboardConversationPage) {
@@ -125,16 +141,18 @@ final class InboxStore {
     nextCursor = page.nextCursor
     loadedPageCount = 1
     searchText = ""
-    visitorSearchIndex = [:]
   }
 
   var hasActiveConversationFilters: Bool {
     priorityFilter != .all
       || sentimentFilter != .all
+      || faqResolverHandlingFilter != .all
       || channelFilter != nil
+      || !appVersionFilters.isEmpty
       || !metadataFilters.isEmpty
       || hideSeenConversations
       || onlyPreviouslyOpenedConversations
+      || onlyTeamActionNeededConversations
   }
 
   var canLoadMore: Bool {
@@ -156,11 +174,14 @@ final class InboxStore {
   func clearFilters() {
     priorityFilter = .all
     sentimentFilter = .all
-    channelFilter = nil
+    faqResolverHandlingFilter = .all
+    channelFilter = workspaceChannelFilter
+    appVersionFilters = []
     metadataFilters = [:]
     hideEmptyConversations = true
     hideSeenConversations = false
     onlyPreviouslyOpenedConversations = false
+    onlyTeamActionNeededConversations = false
   }
 
   func setManuallyUnreadConversationIDs(_ conversationIDs: Set<String>) {
@@ -181,6 +202,10 @@ final class InboxStore {
     totalConversationCountsByScope[scope] ?? 0
   }
 
+  func sidebarConversationCount(for scope: InboxScope) -> Int {
+    sidebarConversationCountsByScope[scope] ?? 0
+  }
+
   func conversationMatchesMetadataFilters(_ conversation: DashboardConversation) -> Bool {
     for (key, expectedValue) in metadataFilters {
       guard conversation.metadata?[key.rawValue] == expectedValue else {
@@ -194,6 +219,27 @@ final class InboxStore {
   func conversationMatchesChannelFilter(_ conversation: DashboardConversation) -> Bool {
     guard let channelFilter else { return true }
     return conversation.channel == channelFilter
+  }
+
+  func applyWorkspaceChannelFilter(_ channelFilter: String?) {
+    workspaceChannelFilter = channelFilter
+    self.channelFilter = channelFilter
+  }
+
+  func conversationMatchesAppVersionFilters(_ conversation: DashboardConversation) -> Bool {
+    guard !appVersionFilters.isEmpty else { return true }
+    guard let appVersion = conversation.appVersionIndicatorText else { return false }
+    return appVersionFilters.contains(appVersion)
+  }
+
+  func setAppVersionFilter(_ appVersion: String, isSelected: Bool) {
+    if appVersionFilters.contains(appVersion) {
+      if !isSelected {
+        appVersionFilters.remove(appVersion)
+      }
+    } else if isSelected {
+      appVersionFilters.insert(appVersion)
+    }
   }
 
   func conversation(
@@ -222,10 +268,6 @@ final class InboxStore {
     }
   }
 
-  func handleSearchTextChange() {
-    scheduleMetadataHydrationIfNeeded()
-  }
-
   func loadMoreConversations(
     pageBatchLimit: Int,
     onError: @escaping @MainActor (Error) -> Void
@@ -249,7 +291,6 @@ final class InboxStore {
     if result.loadedPageCount > 0 {
       self.nextCursor = result.nextCursor
       loadedPageCount += result.loadedPageCount
-      scheduleMetadataHydrationIfNeeded()
 
       InboxDiagnostics.log(
         "[Inbox] loadMore success visible=\(conversations.count) loadedPages=\(loadedPageCount) nextCursor=\(self.nextCursor ?? "nil")"
@@ -347,7 +388,6 @@ final class InboxStore {
       nextCursor = page.nextCursor
     }
 
-    scheduleMetadataHydrationIfNeeded()
   }
 
   func containsConversation(id: String?) -> Bool {
@@ -514,35 +554,18 @@ final class InboxStore {
     conversations[index] = conversations[index].withLastSeenAt(lastSeenAt)
   }
 
-  func cacheSearchVisitor(_ visitor: DashboardVisitor?) {
-    guard let visitor else { return }
-
-    let searchableText = [
-      visitor.contact?.name,
-      visitor.contact?.email,
-      visitor.contact?.externalId,
-      visitor.contact?.metadata?.dashboardSearchText,
-      visitor.attribution?.dashboardSearchText,
-      visitor.currentPage?.dashboardSearchText,
-    ]
-      .compactMap(Self.nonEmpty(_:))
-      .joined(separator: " ")
-
-    var updatedIndex = visitorSearchIndex
-    updatedIndex[visitor.id] = searchableText
-    visitorSearchIndex = updatedIndex
-  }
-
   private func rebuildDerivedState() {
     let metricsByID = buildConversationMetrics()
 
     filteredConversations = buildFilteredConversations()
     availableChannelFilters = buildAvailableChannelFilters()
+    availableAppVersionFilters = buildAvailableAppVersionFilters()
     availableMetadataFilters = buildAvailableMetadataFilters()
 
     var shownConversationsByScope: [InboxScope: [DashboardConversation]] = [:]
     var shownConversationCountsByScope: [InboxScope: Int] = [:]
     var totalConversationCountsByScope: [InboxScope: Int] = [:]
+    var sidebarConversationCountsByScope: [InboxScope: Int] = [:]
 
     for scope in InboxScope.allCases {
       let visibleConversations = sortConversations(
@@ -560,11 +583,18 @@ final class InboxStore {
         applySearch: false,
         metricsByID: metricsByID
       ).count
+      sidebarConversationCountsByScope[scope] = inboxScopedConversations(
+        in: scope,
+        applySearch: false,
+        metricsByID: metricsByID,
+        forceHideEmpty: true
+      ).count
     }
 
     self.shownConversationsByScope = shownConversationsByScope
     self.shownConversationCountsByScope = shownConversationCountsByScope
     self.totalConversationCountsByScope = totalConversationCountsByScope
+    self.sidebarConversationCountsByScope = sidebarConversationCountsByScope
   }
 
   private func buildFilteredConversations() -> [DashboardConversation] {
@@ -601,6 +631,18 @@ final class InboxStore {
         result.insert(channel)
       }
       .map(InboxChannelFilterOption.init(value:))
+      .sorted {
+        $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+      }
+  }
+
+  private func buildAvailableAppVersionFilters() -> [InboxAppVersionFilterOption] {
+    conversations
+      .compactMap(\.appVersionIndicatorText)
+      .reduce(into: Set<String>()) { result, appVersion in
+        result.insert(appVersion)
+      }
+      .map(InboxAppVersionFilterOption.init(value:))
       .sorted {
         $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
       }
@@ -784,50 +826,20 @@ final class InboxStore {
     [
       conversation.visitorDisplayName,
       conversation.displayTitle,
+      conversation.visitorTitle,
       conversation.visitorSecondaryLine,
       conversation.previewText,
       conversation.metadata?.dashboardSearchText,
       conversation.id,
+      conversation.visitorId,
+      conversation.visitor.id,
+      conversation.visitor.contact?.id,
       conversation.status.label,
       conversation.priority.label,
       conversation.sentiment?.capitalized,
-      visitorSearchIndex[conversation.visitorId],
     ]
       .compactMap(Self.nonEmpty(_:))
       .joined(separator: " ")
-  }
-
-  private func scheduleMetadataHydrationIfNeeded() {
-    guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-          let configuration else {
-      return
-    }
-
-    var seenVisitorIDs: Set<String> = []
-    let missingVisitorIDs = conversations
-      .map(\.visitorId)
-      .filter { seenVisitorIDs.insert($0).inserted }
-      .filter { visitorSearchIndex[$0] == nil }
-
-    guard !missingVisitorIDs.isEmpty else { return }
-
-    metadataHydrationTask?.cancel()
-    metadataHydrationTask = Task { [weak self] in
-      let backendClient = CossistantAdminClient(configuration: configuration)
-
-      for visitorID in missingVisitorIDs {
-        guard let self, !Task.isCancelled else { return }
-
-        do {
-          let visitor = try await backendClient.visitors.fetchVisitor(id: visitorID)
-          await MainActor.run {
-            self.cacheSearchVisitor(visitor)
-          }
-        } catch {
-          continue
-        }
-      }
-    }
   }
 
   private static func nonEmpty(_ value: String?) -> String? {
@@ -881,7 +893,8 @@ private extension InboxStore {
   private func inboxScopedConversations(
     in scope: InboxScope,
     applySearch: Bool,
-    metricsByID: [String: ConversationMetrics]
+    metricsByID: [String: ConversationMetrics],
+    forceHideEmpty: Bool = false
   ) -> [DashboardConversation] {
     let searchableConversations = applySearch ? filteredConversations : conversations
 
@@ -891,10 +904,13 @@ private extension InboxStore {
         && priorityFilter.includes(conversation.priority)
         && sentimentFilter.includes(metrics.sentimentCategory)
         && conversationMatchesChannelFilter(conversation)
+        && conversationMatchesAppVersionFilters(conversation)
         && conversationMatchesMetadataFilters(conversation)
         && (!hideSeenConversations || metrics.hasUnreadActivity)
         && (!onlyPreviouslyOpenedConversations || conversation.lastSeenAtDate != nil)
-        && (!hideEmptyConversations || conversation.hasContent)
+        && (!onlyTeamActionNeededConversations || conversation.teamActionNeededPreviewText != nil)
+        && faqResolverHandlingFilter.includes(conversation)
+        && (!(hideEmptyConversations || forceHideEmpty) || conversation.hasContent)
     }
   }
 

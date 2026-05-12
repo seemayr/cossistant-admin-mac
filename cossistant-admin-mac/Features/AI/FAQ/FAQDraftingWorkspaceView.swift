@@ -6,6 +6,7 @@ struct FAQDraftingWorkspaceView: View {
   @Bindable var store: FAQStore
   let availableAIAgents: [DashboardWebsite.AIAgent]
   let selectedConversation: DashboardConversation?
+  let showBackendTranslatedSubjects: Bool
   let canBuildFromConversation: Bool
   let onOptimizeDraft: () -> Void
   let onBuildFromSelectedConversation: () -> Void
@@ -40,31 +41,16 @@ struct FAQDraftingWorkspaceView: View {
             .foregroundStyle(.red)
         }
 
-        HStack(alignment: .top, spacing: 20) {
-          VStack(alignment: .leading, spacing: 20) {
-            FAQDraftEditorCard(
-              title: "Manual Draft",
-              subtitle: "These fields stay editable. Optimize creates a separate suggestion instead of overwriting this draft.",
-              draft: $editableDraft,
-              isEditable: true
-            )
-
-            FAQTrainingStatsCard(
-              title: "Manual Draft Training Stats",
-              draft: editableDraft
-            )
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .top, spacing: 20) {
+            draftColumn
+            suggestionColumn
           }
-          .frame(maxWidth: .infinity, alignment: .topLeading)
 
           VStack(alignment: .leading, spacing: 20) {
-            FAQSuggestionCard(
-              store: store,
-              onApplyToDraft: onApplySuggestionToDraft
-            )
-
-            FAQGuideHighlightsCard()
+            draftColumn
+            suggestionColumn
           }
-          .frame(maxWidth: .infinity, alignment: .topLeading)
         }
       }
       .padding(24)
@@ -80,6 +66,35 @@ struct FAQDraftingWorkspaceView: View {
     }
   }
 
+  private var draftColumn: some View {
+    VStack(alignment: .leading, spacing: 20) {
+      FAQDraftEditorCard(
+        title: "Manual Draft",
+        subtitle: "These fields stay editable. Optimize creates a separate suggestion instead of overwriting this draft.",
+        draft: $editableDraft,
+        isEditable: true
+      )
+
+      FAQTrainingStatsCard(
+        title: "Manual Draft Training Stats",
+        draft: editableDraft
+      )
+    }
+    .frame(maxWidth: .infinity, alignment: .topLeading)
+  }
+
+  private var suggestionColumn: some View {
+    VStack(alignment: .leading, spacing: 20) {
+      FAQSuggestionCard(
+        store: store,
+        onApplyToDraft: onApplySuggestionToDraft
+      )
+
+      FAQGuideHighlightsCard()
+    }
+    .frame(maxWidth: .infinity, alignment: .topLeading)
+  }
+
   private var faqActionCard: some View {
     PrototypeInfoCard(title: "Draft Actions") {
       Text("Question and answer carry the primary retrieval signal. Related questions and categories stay secondary.")
@@ -92,30 +107,15 @@ struct FAQDraftingWorkspaceView: View {
           .foregroundStyle(.secondary)
       }
 
-      HStack(spacing: 12) {
-        Button(store.isOptimizing ? "Optimizing…" : "Optimize Draft") {
-          commitEditableDraft()
-          onOptimizeDraft()
-        }
-        .disabled(!canOptimizeEditableDraft)
-
-        Button(store.isBuildingFromConversation ? "Building…" : "Build from Selected Conversation") {
-          onBuildFromSelectedConversation()
-        }
-        .disabled(!canBuildFromConversation)
-
-        Button("Reset Draft") {
-          onResetDraft()
-        }
-        .disabled(!editableDraft.hasMeaningfulContent)
-
-        if store.suggestion != nil {
-          Button("Clear Suggestion") {
-            onClearSuggestion()
-          }
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 12) {
+          draftActionButtons
+          Spacer()
         }
 
-        Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+          draftActionButtons
+        }
       }
 
       if let selectedConversation {
@@ -128,7 +128,7 @@ struct FAQDraftingWorkspaceView: View {
               .font(.caption.weight(.semibold))
               .foregroundStyle(.secondary)
 
-            Text(selectedConversation.displayTitle)
+            Text(selectedConversation.displayTitle(showBackendTranslatedSubjects: showBackendTranslatedSubjects))
               .font(.subheadline)
 
             Text(selectedConversation.visitorDisplayName)
@@ -168,37 +168,15 @@ struct FAQDraftingWorkspaceView: View {
       }
       .pickerStyle(.menu)
 
-      HStack(spacing: 12) {
-        Button(store.isSavingToKnowledge ? "Saving…" : "Save Draft") {
-          Task {
-            commitEditableDraft()
-            await onSaveDraftToKnowledge()
-          }
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 12) {
+          knowledgeActionButtons(soleAvailableAIAgentID: soleAvailableAIAgentID)
+          Spacer()
         }
-        .disabled(!canSaveEditableDraftToKnowledge)
 
-        Button(store.isSavingToKnowledge ? "Saving…" : "Save Suggestion") {
-          Task {
-            await onSaveSuggestionToKnowledge()
-          }
+        VStack(alignment: .leading, spacing: 8) {
+          knowledgeActionButtons(soleAvailableAIAgentID: soleAvailableAIAgentID)
         }
-        .disabled(!store.canSaveSuggestionToKnowledge)
-
-        Button(store.isStartingTraining ? "Training…" : "Save & Train") {
-          Task {
-            commitEditableDraft()
-            await onSaveAndTrainSuggestion()
-          }
-        }
-        .buttonStyle(.borderedProminent)
-        .disabled(
-          (store.selectedAIAgentID ?? soleAvailableAIAgentID) == nil
-            || store.isSavingToKnowledge
-            || store.isStartingTraining
-            || (!canSaveEditableDraftToKnowledge && !store.canSaveSuggestionToKnowledge)
-        )
-
-        Spacer()
       }
 
       if let lastSavedKnowledgeTitle = store.lastSavedKnowledgeTitle,
@@ -224,6 +202,65 @@ struct FAQDraftingWorkspaceView: View {
           }
         }
       }
+    }
+  }
+
+  private var draftActionButtons: some View {
+    Group {
+      Button(store.isOptimizing ? "Optimizing…" : "Optimize Draft") {
+        commitEditableDraft()
+        onOptimizeDraft()
+      }
+      .disabled(!canOptimizeEditableDraft)
+
+      Button(store.isBuildingFromConversation ? "Building…" : "Build from Selected Conversation") {
+        onBuildFromSelectedConversation()
+      }
+      .disabled(!canBuildFromConversation)
+
+      Button("Reset Draft") {
+        onResetDraft()
+      }
+      .disabled(!editableDraft.hasMeaningfulContent)
+
+      if store.suggestion != nil {
+        Button("Clear Suggestion") {
+          onClearSuggestion()
+        }
+      }
+    }
+  }
+
+  private func knowledgeActionButtons(soleAvailableAIAgentID: String?) -> some View {
+    Group {
+      Button(store.isSavingToKnowledge ? "Saving…" : "Save Draft") {
+        Task {
+          commitEditableDraft()
+          await onSaveDraftToKnowledge()
+        }
+      }
+      .disabled(!canSaveEditableDraftToKnowledge)
+
+      Button(store.isSavingToKnowledge ? "Saving…" : "Save Suggestion") {
+        Task {
+          await onSaveSuggestionToKnowledge()
+        }
+      }
+      .disabled(!store.canSaveSuggestionToKnowledge)
+
+      Button(store.isStartingTraining ? "Training…" : "Save & Train") {
+        Task {
+          commitEditableDraft()
+          await onSaveAndTrainSuggestion()
+        }
+      }
+      .buttonStyle(.borderedProminent)
+      .disabled(
+        (store.selectedAIAgentID ?? soleAvailableAIAgentID) == nil
+          || store.isSavingToKnowledge
+          || store.isStartingTraining
+          || (!canSaveEditableDraftToKnowledge && !store.canSaveSuggestionToKnowledge)
+      )
     }
   }
 

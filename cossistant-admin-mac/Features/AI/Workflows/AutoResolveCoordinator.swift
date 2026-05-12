@@ -180,11 +180,12 @@ final class AutoResolveCoordinator {
             websiteName: workspaceName,
             conversationID: conversation.id
           )
-          let didPersistCategory = await persistCategory(
-            verdict.category,
-            for: conversation.id
+          let didPersistMetadata = await persistAutoResolveMetadata(
+            category: verdict.category,
+            summary: verdict.summary,
+            for: conversation
           )
-          if didPersistCategory {
+          if didPersistMetadata {
             metadataUpdated += 1
           } else {
             metadataUpdateFailed += 1
@@ -208,6 +209,7 @@ final class AutoResolveCoordinator {
                 aiMarkedResolved: verdict.isResolved,
                 category: verdict.category,
                 title: verdict.title,
+                summary: verdict.summary,
                 body: verdict.body,
                 rawAIResponseText: verdict.rawResponseText,
                 isSeen: !conversation.hasUnreadActivity
@@ -224,6 +226,7 @@ final class AutoResolveCoordinator {
                 aiMarkedResolved: verdict.isResolved,
                 category: verdict.category,
                 title: verdict.title,
+                summary: verdict.summary,
                 body: verdict.body,
                 decisionNote: decisionNote(
                   for: conversation,
@@ -250,7 +253,7 @@ final class AutoResolveCoordinator {
       }
 
       let resolvedTotal = resolvedWithoutAI + resolvedWithAI
-      store.statusMessage = "Auto-resolved \(resolvedTotal) conversations (\(resolvedWithoutAI) empty, \(resolvedWithAI) via AI), left \(leftOpen) open, failed \(failed), updated category metadata on \(metadataUpdated) conversations" + (metadataUpdateFailed > 0 ? " (\(metadataUpdateFailed) metadata updates failed)." : ".")
+      store.statusMessage = "Auto-resolved \(resolvedTotal) conversations (\(resolvedWithoutAI) empty, \(resolvedWithAI) via AI), left \(leftOpen) open, failed \(failed), updated summary/category metadata on \(metadataUpdated) conversations" + (metadataUpdateFailed > 0 ? " (\(metadataUpdateFailed) metadata updates failed)." : ".")
       store.task = nil
     } catch {
       if isIgnorableCancellation(error) {
@@ -343,25 +346,31 @@ final class AutoResolveCoordinator {
     return lines.joined(separator: "\n")
   }
 
-  private func persistCategory(
-    _ category: AutoResolveConversationCategory,
-    for conversationID: DashboardConversation.ID
+  private func persistAutoResolveMetadata(
+    category: AutoResolveConversationCategory,
+    summary: String,
+    for conversation: DashboardConversation
   ) async -> Bool {
     let autoResolveTimestamp = ISO8601DateFormatter.internetDateTime.string(from: .now)
+    var metadata = conversation.metadata ?? [:]
+    metadata[InboxMetadataFilterKey.category.rawValue] = .string(category.rawValue)
+    if let normalizedSummary = summary.nilIfEmpty {
+      metadata[AutoResolveMetadataKey.summary] = .string(normalizedSummary)
+    } else {
+      metadata.removeValue(forKey: AutoResolveMetadataKey.summary)
+    }
+    metadata[AutoResolveMetadataKey.lastAutoResolve] = .string(autoResolveTimestamp)
 
     do {
       let updatedConversation = try await backendClient.conversations.updateConversationMetadata(
-        conversationID: conversationID,
-        metadata: [
-          InboxMetadataFilterKey.category.rawValue: .string(category.rawValue),
-          AutoResolveMetadataKey.lastAutoResolve: .string(autoResolveTimestamp),
-        ]
+        conversationID: conversation.id,
+        metadata: metadata
       )
       applyMutatedConversation(updatedConversation)
-      await refreshSelectedConversationIfNeeded(conversationID)
+      await refreshSelectedConversationIfNeeded(conversation.id)
       return true
     } catch {
-      log("Failed to persist auto-resolve category for conversation \(conversationID): \(logMessage(for: error))")
+      log("Failed to persist auto-resolve metadata for conversation \(conversation.id): \(logMessage(for: error))")
       return false
     }
   }

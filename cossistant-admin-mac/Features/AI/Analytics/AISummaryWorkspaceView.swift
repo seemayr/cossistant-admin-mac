@@ -4,6 +4,10 @@ import CossistantAdmin
 
 struct AISummaryWorkspaceView: View {
   @Bindable var store: AnalyticsStore
+  let availableChannelFilters: () -> [InboxChannelFilterOption]
+  let availableMetadataFilters: () -> [InboxMetadataFilterSection]
+  let availableAppVersionFilters: () -> [AutoResolveTextFilterOption]
+  let availableGameIDFilters: () -> [AutoResolveTextFilterOption]
   let onGenerateSummary: () -> Void
   let onReset: () -> Void
   let onCopySourceDocument: () -> Void
@@ -75,6 +79,8 @@ struct AISummaryWorkspaceView: View {
         }
       }
 
+      analyticsFilterControls
+
       if !store.hasOpenAIAPIKey {
         Label("Add an OpenAI API key in Settings to enable conversation summaries.", systemSymbol: .keyFill)
           .font(.subheadline)
@@ -103,6 +109,220 @@ struct AISummaryWorkspaceView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+      }
+    }
+  }
+
+  private var analyticsFilterControls: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      LazyVGrid(columns: analyticsFilterColumns, alignment: .leading, spacing: 8) {
+        if !availableChannelFilters().isEmpty {
+          channelFilterMenu
+        }
+
+        filterMenu(
+          title: "Priority",
+          value: store.priorityFilter.label,
+          systemImage: .flag
+        ) {
+          Picker("Priority", selection: $store.priorityFilter) {
+            ForEach(InboxPriorityFilter.allCases) { filter in
+              Text(filter.label)
+                .tag(filter)
+            }
+          }
+        }
+
+        filterMenu(
+          title: "Status",
+          value: store.statusFilter.label,
+          systemImage: .circleFill
+        ) {
+          Picker("Status", selection: $store.statusFilter) {
+            ForEach(AnalyticsSummaryStatusFilter.allCases) { filter in
+              Text(filter.label)
+                .tag(filter)
+            }
+          }
+        }
+
+        if !availableMetadataFilters().isEmpty {
+          metadataFilterMenu
+        }
+
+        if !availableAppVersionFilters().isEmpty {
+          textFilterMenu(
+            title: "App Version",
+            value: store.appVersionFilter,
+            fallbackValue: "Any Version",
+            systemImage: .shippingbox,
+            options: availableAppVersionFilters()
+          ) { value in
+            store.appVersionFilter = value
+          }
+        }
+
+        if !availableGameIDFilters().isEmpty {
+          textFilterMenu(
+            title: "Game",
+            value: store.gameIDFilter,
+            fallbackValue: "Any Game",
+            systemImage: .gamecontroller,
+            options: availableGameIDFilters()
+          ) { value in
+            store.gameIDFilter = value
+          }
+        }
+      }
+      .padding(.vertical, 2)
+      .disabled(store.isGeneratingSummary || store.isSendingFollowUp)
+
+      if store.hasActiveConversationFilters {
+        Button("Clear Conversation Filters") {
+          store.clearConversationFilters()
+        }
+        .buttonStyle(.borderless)
+        .font(.caption.weight(.medium))
+        .disabled(store.isGeneratingSummary || store.isSendingFollowUp)
+      }
+    }
+  }
+
+  private var analyticsFilterColumns: [GridItem] {
+    Array(
+      repeating: GridItem(.flexible(minimum: 140), spacing: 8, alignment: .leading),
+      count: 3
+    )
+  }
+
+  private var channelFilterMenu: some View {
+    Menu {
+      Button {
+        store.channelFilter = nil
+      } label: {
+        menuLabel("Any Channel", isSelected: store.channelFilter == nil)
+      }
+
+      ForEach(availableChannelFilters()) { option in
+        Button {
+          store.channelFilter = option.value
+        } label: {
+          menuLabel(
+            option.label,
+            isSelected: store.channelFilter == option.value
+          )
+        }
+      }
+    } label: {
+      HeaderControlLabel(
+        title: "Channel",
+        value: store.channelFilter.map { InboxChannelFilterOption(value: $0).label } ?? "Any Channel",
+        systemImage: .bubbleLeftAndBubbleRight
+      )
+    }
+  }
+
+  private var metadataFilterMenu: some View {
+    Menu {
+      ForEach(availableMetadataFilters()) { section in
+        Menu(section.label) {
+          Button {
+            store.setMetadataFilter(nil, for: section.key)
+          } label: {
+            menuLabel(
+              "Any \(section.label)",
+              isSelected: store.selectedMetadataValue(for: section.key) == nil
+            )
+          }
+
+          ForEach(section.options) { option in
+            Button {
+              store.setMetadataFilter(option.value, for: section.key)
+            } label: {
+              menuLabel(
+                option.label,
+                isSelected: store.selectedMetadataValue(for: section.key) == option.value
+              )
+            }
+          }
+        }
+      }
+    } label: {
+      HeaderControlLabel(
+        title: "Metadata",
+        value: metadataFilterSummary ?? "Any Metadata",
+        systemImage: .tag
+      )
+    }
+  }
+
+  private var metadataFilterSummary: String? {
+    let values: [String] = availableMetadataFilters().compactMap { section in
+      guard let selectedValue = store.selectedMetadataValue(for: section.key) else {
+        return nil
+      }
+
+      return "\(section.label): \(selectedValue.dashboardDisplayText)"
+    }
+
+    guard !values.isEmpty else { return nil }
+    return values.joined(separator: " • ")
+  }
+
+  private func filterMenu<Content: View>(
+    title: String,
+    value: String,
+    systemImage: SFSymbol,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    Menu {
+      content()
+    } label: {
+      HeaderControlLabel(
+        title: title,
+        value: value,
+        systemImage: systemImage
+      )
+    }
+  }
+
+  private func textFilterMenu(
+    title: String,
+    value: String?,
+    fallbackValue: String,
+    systemImage: SFSymbol,
+    options: [AutoResolveTextFilterOption],
+    onSelect: @escaping (String?) -> Void
+  ) -> some View {
+    Menu {
+      Button {
+        onSelect(nil)
+      } label: {
+        menuLabel(fallbackValue, isSelected: value == nil)
+      }
+
+      ForEach(options) { option in
+        Button {
+          onSelect(option.value)
+        } label: {
+          menuLabel(option.label, isSelected: value == option.value)
+        }
+      }
+    } label: {
+      HeaderControlLabel(
+        title: title,
+        value: value ?? fallbackValue,
+        systemImage: systemImage
+      )
+    }
+  }
+
+  private func menuLabel(_ title: String, isSelected: Bool) -> some View {
+    Group {
+      if isSelected {
+        Label(title, systemSymbol: .checkmark)
+      } else {
+        Text(title)
       }
     }
   }

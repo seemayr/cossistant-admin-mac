@@ -14,9 +14,9 @@ struct PrototypeInfoCard<Content: View>: View {
     }
     .padding(16)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     .overlay {
-      RoundedRectangle(cornerRadius: 18, style: .continuous)
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
         .strokeBorder(.separator.opacity(0.2), lineWidth: 1)
     }
   }

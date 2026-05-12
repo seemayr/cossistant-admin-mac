@@ -103,6 +103,9 @@ struct OpenAIReplyDraftClient {
     Use the provided conversation transcript and the provided FAQ entry as the only sources of truth.
     Treat the FAQ answer as authoritative, do not invent product details or policy, and draft the most helpful answer you can while staying grounded in the FAQ.
     Write in the visitor's language. Prefer the explicit language hints when present; otherwise infer the language from the transcript.
+    The reply will be sent from a human/team account in the dashboard. Write as the teammate who is already answering.
+    Do not say that you will escalate, forward, pass this to the team, communicate it to the team, or have a team member review it.
+    If more information is needed before a deeper check is possible, ask for that information directly so you can take a closer look.
     Return only the final reply text with no framing, explanation, bullets, or quotation marks.
     """
 

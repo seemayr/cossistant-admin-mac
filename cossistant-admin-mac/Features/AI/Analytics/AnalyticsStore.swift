@@ -4,6 +4,8 @@ import CossistantAdmin
 
 @Observable @MainActor
 final class AnalyticsStore {
+  private var workspaceChannelFilter: String?
+
   var summaryTask: Task<Void, Never>?
   var followUpTask: Task<Void, Never>?
   var hasOpenAIAPIKey = false
@@ -16,6 +18,12 @@ final class AnalyticsStore {
     to: Date()
   ) ?? Date()
   var customEndDate = Date()
+  var channelFilter: String?
+  var priorityFilter: InboxPriorityFilter = .all
+  var statusFilter: AnalyticsSummaryStatusFilter = .all
+  var metadataFilters: [InboxMetadataFilterKey: JSONValue] = [:]
+  var appVersionFilter: String?
+  var gameIDFilter: String?
   var summaryMessages: [AnalyticsSummaryChatMessage] = []
   var followUpDraft = ""
   var summaryStatusMessage: String?
@@ -64,5 +72,40 @@ final class AnalyticsStore {
       && followUpDraft.nilIfEmpty != nil
       && !isGeneratingSummary
       && !isSendingFollowUp
+  }
+
+  var hasActiveConversationFilters: Bool {
+    channelFilter != nil
+      || priorityFilter != .all
+      || statusFilter != .all
+      || !metadataFilters.isEmpty
+      || appVersionFilter != nil
+      || gameIDFilter != nil
+  }
+
+  func selectedMetadataValue(for key: InboxMetadataFilterKey) -> JSONValue? {
+    metadataFilters[key]
+  }
+
+  func setMetadataFilter(_ value: JSONValue?, for key: InboxMetadataFilterKey) {
+    if let value {
+      metadataFilters[key] = value
+    } else {
+      metadataFilters.removeValue(forKey: key)
+    }
+  }
+
+  func clearConversationFilters() {
+    channelFilter = workspaceChannelFilter
+    priorityFilter = .all
+    statusFilter = .all
+    metadataFilters = [:]
+    appVersionFilter = nil
+    gameIDFilter = nil
+  }
+
+  func applyWorkspaceChannelFilter(_ channelFilter: String?) {
+    workspaceChannelFilter = channelFilter
+    self.channelFilter = channelFilter
   }
 }

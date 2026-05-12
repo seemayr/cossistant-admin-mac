@@ -5,6 +5,7 @@ import CossistantAdmin
 struct SetupView: View {
   @Bindable var store: LauncherStore
   let title: String
+  @State private var showsPrivateAPIKey = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
@@ -91,8 +92,11 @@ struct SetupView: View {
         TextField("https://api.cossistant.com/v1", text: $store.configuration.apiBaseURLString)
           .textFieldStyle(.roundedBorder)
 
-        SecureField("sk_live_...", text: $store.configuration.privateAPIKey)
-          .textFieldStyle(.roundedBorder)
+        SetupAPIKeyField(
+          placeholder: "sk_live_...",
+          text: $store.configuration.privateAPIKey,
+          isVisible: $showsPrivateAPIKey
+        )
 
         Text("Expected auth header: `Authorization: Bearer sk_[live|test]_...`")
           .font(.caption)
@@ -125,6 +129,34 @@ struct SetupView: View {
         }
       }
       .padding(.top, 4)
+    }
+  }
+}
+
+private struct SetupAPIKeyField: View {
+  let placeholder: String
+  @Binding var text: String
+  @Binding var isVisible: Bool
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Group {
+        if isVisible {
+          TextField(placeholder, text: $text)
+        } else {
+          SecureField(placeholder, text: $text)
+        }
+      }
+      .textFieldStyle(.roundedBorder)
+
+      Button {
+        isVisible.toggle()
+      } label: {
+        Image(systemSymbol: isVisible ? .eyeSlash : .eye)
+      }
+      .buttonStyle(.borderless)
+      .help(isVisible ? "Hide key" : "Show key")
+      .accessibilityLabel(isVisible ? "Hide key" : "Show key")
     }
   }
 }

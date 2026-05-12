@@ -26,68 +26,17 @@ struct ConversationComposerView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      HStack(alignment: .center, spacing: 12) {
-        Picker("", selection: $visibility) {
-          Text("Reply")
-            .tag(DashboardTimelineItemVisibility.public)
-          Text("Private Note")
-            .tag(DashboardTimelineItemVisibility.private)
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(maxWidth: 230)
-
-        if visibility == .public, canUseOpenAIReplyDrafts {
-          Button {
-            Task {
-              await generateReplyDraft()
-            }
-          } label: {
-            Label(
-              isGeneratingReplyDraft ? "Drafting…" : "Draft with AI",
-              systemSymbol: .sparklesRectangleStack
-            )
-          }
-          .buttonStyle(.bordered)
-          .disabled(isGeneratingReplyDraft || trimmedLocalDraftText.isEmpty)
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .center, spacing: 12) {
+          composerLeadingControls
+          Spacer(minLength: 12)
+          sendButton
         }
 
-        if canUseTranslationPreview {
-          Button {
-            Task {
-              await previewTranslation()
-            }
-          } label: {
-            Image(systemSymbol: .globe)
-          }
-          .buttonStyle(.bordered)
-          .disabled(isSending || isGeneratingReplyDraft || isPreviewingTranslation || trimmedLocalDraftText.isEmpty)
-          .help("Preview translation")
+        VStack(alignment: .leading, spacing: 10) {
+          composerLeadingControls
+          sendButton
         }
-
-        Button {
-          importAttachments()
-        } label: {
-          Label("Attach", systemSymbol: .paperclip)
-        }
-        .buttonStyle(.bordered)
-        .disabled(isSending || isGeneratingReplyDraft || attachments.count >= DashboardUploadConstants.maxFilesPerMessage)
-
-        Spacer(minLength: 12)
-
-        Button {
-          Task {
-            await send()
-          }
-        } label: {
-          Label(isSending ? "Sending…" : sendButtonTitle, systemSymbol: sendButtonSymbol)
-        }
-        .buttonStyle(.borderedProminent)
-        .disabled(
-          isSending
-            || isGeneratingReplyDraft
-            || (trimmedLocalDraftText.isEmpty && attachments.isEmpty)
-        )
       }
 
       if !attachments.isEmpty {
@@ -109,11 +58,12 @@ struct ConversationComposerView: View {
         .font(.body)
         .frame(minHeight: 96, maxHeight: 140)
         .scrollContentBackground(.hidden)
+        .disabled(isGeneratingReplyDraft || isSending)
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(alignment: .topLeading) {
           if localDraftText.isEmpty {
-            Text(placeholder)
+            Text(composerPlaceholder)
               .foregroundStyle(.tertiary)
               .padding(.horizontal, 18)
               .padding(.vertical, 20)
@@ -159,6 +109,72 @@ struct ConversationComposerView: View {
     }
   }
 
+  private var composerLeadingControls: some View {
+    Group {
+      Picker("", selection: $visibility) {
+        Text("Reply")
+          .tag(DashboardTimelineItemVisibility.public)
+        Text("Private Note")
+          .tag(DashboardTimelineItemVisibility.private)
+      }
+      .pickerStyle(.segmented)
+      .labelsHidden()
+      .frame(width: 220)
+
+      if visibility == .public, canUseOpenAIReplyDrafts {
+        Button {
+          Task {
+            await generateReplyDraft()
+          }
+        } label: {
+          Label(
+            isGeneratingReplyDraft ? "Drafting…" : "Draft with AI",
+            systemSymbol: .sparklesRectangleStack
+          )
+        }
+        .buttonStyle(.bordered)
+        .disabled(isGeneratingReplyDraft || trimmedLocalDraftText.isEmpty)
+      }
+
+      if canUseTranslationPreview {
+        Button {
+          Task {
+            await previewTranslation()
+          }
+        } label: {
+          Image(systemSymbol: .globe)
+        }
+        .buttonStyle(.bordered)
+        .disabled(isSending || isGeneratingReplyDraft || isPreviewingTranslation || trimmedLocalDraftText.isEmpty)
+        .help("Preview translation")
+      }
+
+      Button {
+        importAttachments()
+      } label: {
+        Label("Attach", systemSymbol: .paperclip)
+      }
+      .buttonStyle(.bordered)
+      .disabled(isSending || isGeneratingReplyDraft || attachments.count >= DashboardUploadConstants.maxFilesPerMessage)
+    }
+  }
+
+  private var sendButton: some View {
+    Button {
+      Task {
+        await send()
+      }
+    } label: {
+      Label(isSending ? "Sending…" : sendButtonTitle, systemSymbol: sendButtonSymbol)
+    }
+    .buttonStyle(.borderedProminent)
+    .disabled(
+      isSending
+        || isGeneratingReplyDraft
+        || (trimmedLocalDraftText.isEmpty && attachments.isEmpty)
+    )
+  }
+
   private var sendButtonTitle: String {
     visibility == .public ? "Send Reply" : "Save Note"
   }
@@ -171,6 +187,14 @@ struct ConversationComposerView: View {
     visibility == .public
       ? "Reply to the visitor…"
       : "Write an internal note…"
+  }
+
+  private var composerPlaceholder: String {
+    if isGeneratingReplyDraft {
+      return "Drafting reply…"
+    }
+
+    return placeholder
   }
 
   private var trimmedLocalDraftText: String {

@@ -5,6 +5,7 @@ import CossistantAdmin
 
 struct ConversationStatisticsWorkspaceView: View {
   @Bindable var store: InboxStore
+  let workspaceChannelFilter: String?
   @State private var filters = ConversationStatisticsFilters()
 
   private var overview: ConversationStatisticsOverview {
@@ -77,6 +78,12 @@ struct ConversationStatisticsWorkspaceView: View {
       .padding(24)
       .frame(maxWidth: .infinity, alignment: .leading)
       .textSelection(.enabled)
+    }
+    .onAppear {
+      filters.applyWorkspaceChannelFilter(workspaceChannelFilter)
+    }
+    .onChange(of: workspaceChannelFilter) { _, channelFilter in
+      filters.applyWorkspaceChannelFilter(channelFilter)
     }
   }
 
@@ -242,12 +249,18 @@ struct ConversationStatisticsWorkspaceView: View {
         Spacer()
 
         Button("Reset Filters") {
-          filters = ConversationStatisticsFilters()
+          filters = resetFilters
         }
         .buttonStyle(.borderless)
-        .disabled(filters == ConversationStatisticsFilters())
+        .disabled(filters == resetFilters)
       }
     }
+  }
+
+  private var resetFilters: ConversationStatisticsFilters {
+    var filters = ConversationStatisticsFilters()
+    filters.applyWorkspaceChannelFilter(workspaceChannelFilter)
+    return filters
   }
 
   private var snapshotCard: some View {
@@ -777,6 +790,10 @@ private struct ConversationStatisticsFilters: Equatable {
   var hasVisitorRatingOnly = false
   var hasGroupIDOnly = false
   var hasAuthIdentityOnly = false
+
+  mutating func applyWorkspaceChannelFilter(_ channelFilter: String?) {
+    channel = channelFilter
+  }
 
   func includes(_ conversation: DashboardConversation, now: Date) -> Bool {
     if isNonEmptyOnly && !conversation.hasContent {

@@ -16,7 +16,9 @@ struct InboxQueueView: View {
         InboxConversationRow(
           model: model,
           conversation: conversation,
-          visitorPresence: model.visitorPresence(for: conversation.visitorId)
+          visitorPresence: model.visitorPresence(for: conversation.visitorId),
+          showsMetadataSummaryPreviews: store.showsMetadataSummaryPreviews,
+          showBackendTranslatedSubjects: model.workspaceSettings.showBackendTranslatedSubjects
         )
         .tag(conversation.id)
       }
@@ -53,6 +55,7 @@ struct InboxQueueView: View {
       }
     }
     .searchable(text: $store.searchText, prompt: "Search conversations")
+    .navigationTitle(scope.shortTitle)
   }
 
   private var displayedConversations: [DashboardConversation] {

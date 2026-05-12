@@ -5,17 +5,15 @@ struct GlobalSettingsSceneView: View {
   @State private var store = SettingsStore()
 
   var body: some View {
-    Form {
-      GlobalServiceSettingsCard(store: store)
-    }
-    .formStyle(.grouped)
-    .toolbar {
-      ToolbarItem(placement: .primaryAction) {
-        Button("Save") {
-          store.save()
-        }
+    ScrollView {
+      Form {
+        GlobalServiceSettingsCard(store: store)
       }
+      .formStyle(.grouped)
+      .padding(24)
+      .frame(width: 560)
     }
+    .navigationTitle("Settings")
     .task {
       store.reload()
     }

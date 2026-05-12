@@ -31,6 +31,16 @@ extension DashboardConversation.Priority {
 }
 
 extension DashboardConversation {
+  func displayTitle(showBackendTranslatedSubjects: Bool) -> String {
+    if !showBackendTranslatedSubjects,
+       titleSource == "ai",
+       let visitorTitle = visitorTitle?.nilIfEmpty {
+      return visitorTitle
+    }
+
+    return displayTitle
+  }
+
   var attentionWaitingTint: Color {
     guard let attentionWaitingDuration else { return .orange }
 
@@ -42,6 +52,57 @@ extension DashboardConversation {
     default:
       return .red
     }
+  }
+
+  var visitorWaitingTint: Color {
+    guard let visitorWaitingDuration else { return .orange }
+
+    switch visitorWaitingDuration {
+    case ..<TimeInterval(24 * 60 * 60):
+      return .orange
+    case ..<TimeInterval(72 * 60 * 60):
+      return .yellow
+    default:
+      return .red
+    }
+  }
+
+  var visitorWaitingSinceDate: Date? {
+    guard status == .open,
+          lastMessageTimelineItem?.visitorId != nil else {
+      return nil
+    }
+
+    if let createdAt = lastMessageTimelineItem?.createdAt,
+       let createdAtDate = DashboardTimestampParser.date(from: createdAt) {
+      return createdAtDate
+    }
+
+    return lastMessageAtDate
+  }
+
+  var visitorWaitingDuration: TimeInterval? {
+    guard let visitorWaitingSinceDate else { return nil }
+    return max(0, Date.now.timeIntervalSince(visitorWaitingSinceDate))
+  }
+
+  var showsVisitorWaitingBadge: Bool {
+    guard let visitorWaitingDuration else { return false }
+    return visitorWaitingDuration >= 2 * 24 * 60 * 60
+  }
+
+  var visitorWaitingLabel: String? {
+    guard let visitorWaitingDuration, showsVisitorWaitingBadge else {
+      return nil
+    }
+
+    let hours = Int(visitorWaitingDuration / 3600)
+    if hours < 24 {
+      return "Waiting \(hours)h"
+    }
+
+    let days = hours / 24
+    return "Waiting \(days)d"
   }
 
   var statusBadgeSymbol: SFSymbol? {
@@ -118,7 +179,47 @@ extension DashboardConversation {
     }
   }
 
+  var appVersionIndicatorText: String? {
+    Self.appVersionMetadataKeys
+      .lazy
+      .compactMap(metadataText)
+      .first
+  }
+
   private var normalizedChannel: String {
     channel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private func metadataText(forKey key: String) -> String? {
+    guard let value = metadata?[key], value != .null else { return nil }
+
+    let trimmedValue = value.dashboardDisplayText.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmedValue.isEmpty ? nil : trimmedValue
+  }
+
+  private static let appVersionMetadataKeys = [
+    "appVersion",
+    "app_version",
+    "version",
+    "versionName",
+    "appVersionName",
+    "app_version_name",
+    "clientVersion",
+    "client_version",
+  ]
+}
+
+extension DashboardConversationDetail {
+  func displayTitle(
+    fallback conversation: DashboardConversation,
+    showBackendTranslatedSubjects: Bool
+  ) -> String {
+    if !showBackendTranslatedSubjects,
+       conversation.titleSource == "ai",
+       let visitorTitle = (visitorTitle ?? conversation.visitorTitle)?.nilIfEmpty {
+      return visitorTitle
+    }
+
+    return title?.nilIfEmpty ?? conversation.displayTitle(showBackendTranslatedSubjects: showBackendTranslatedSubjects)
   }
 }

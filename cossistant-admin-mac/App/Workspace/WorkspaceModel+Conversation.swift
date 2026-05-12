@@ -99,7 +99,6 @@ extension WorkspaceModel {
         seenData: resolvedSeenData,
         timelinePage: resolvedTimeline
       )
-      cacheSearchVisitor(resolvedVisitor)
       syncConversationSeenState(
         conversationID: conversationID,
         with: resolvedSeenData,
@@ -191,7 +190,7 @@ extension WorkspaceModel {
 
     guard !untranslated.isEmpty || shouldTranslateClarification else { return }
     guard globalSettings.hasGoogleCloudTranslateAPIKey else {
-      conversationStore.translationErrorMessage = "Add a Google Cloud Translate API key in settings to translate messages that do not already include a stored translation."
+      conversationStore.translationErrorMessage = "Add a Google Cloud Translate API key in settings to translate messages."
       return
     }
 
@@ -259,6 +258,8 @@ extension WorkspaceModel {
   private func storedTeamTranslation(
     for item: DashboardTimelineItem
   ) -> DashboardMessageTranslation? {
+    guard workspaceSettings.showBackendTranslatedMessages else { return nil }
+
     let teamTranslations = item.translationParts
       .filter { $0.audience == "team" }
       .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

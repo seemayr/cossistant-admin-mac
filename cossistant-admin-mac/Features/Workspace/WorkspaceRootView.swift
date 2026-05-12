@@ -17,7 +17,7 @@ struct WorkspaceRootView: View {
 
   private var usesDetailOnlySplitLayout: Bool {
     switch activeRoute {
-    case .statistics, .aiSummarize, .aiAutoResolve, .faq:
+    case .statistics, .settings, .aiSummarize, .aiAutoResolve, .aiFAQResolver, .faq:
       true
     case .inbox, .contacts, .knowledge, .aiAgents:
       false
@@ -57,6 +57,11 @@ struct WorkspaceRootView: View {
     .task {
       await model.restoreSessionIfNeeded()
     }
+    .task {
+      for await _ in NotificationCenter.default.notifications(named: .globalServiceSettingsDidChange) {
+        await model.reloadGlobalSettingsAndRefreshTranslations()
+      }
+    }
     .task(id: autoSeenTrigger) {
       if DashboardReadDebug.isTargetConversation(autoSeenTrigger.selectedConversationID) {
         DashboardReadDebug.log(
@@ -77,9 +82,6 @@ struct WorkspaceRootView: View {
       }
 
       await model.markSelectedConversationRead()
-    }
-    .task(id: model.inboxStore.searchText) {
-      model.handleConversationSearchChange()
     }
     .toolbar {
       if model.website != nil {
@@ -134,7 +136,7 @@ struct WorkspaceRootView: View {
         scope: scope,
         selection: conversationSelectionBinding
       )
-      .navigationSplitViewColumnWidth(min: 280, ideal: 380, max: 460)
+      .navigationSplitViewColumnWidth(min: 280, ideal: 460, max: 620)
     case .contacts:
       ContactsListView(
         store: model.contactsStore,
@@ -148,6 +150,9 @@ struct WorkspaceRootView: View {
         selection: knowledgeSelectionBinding,
         onCreate: { type in
           model.startCreatingKnowledge(type, in: workspaceStore)
+        },
+        onExportFAQJSON: {
+          await exportFAQKnowledge()
         },
         onEdit: { item in
           model.startEditingKnowledge(item, in: workspaceStore)
@@ -163,7 +168,7 @@ struct WorkspaceRootView: View {
         selection: aiAgentSelectionBinding
       )
       .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 380)
-    case .statistics, .aiSummarize, .aiAutoResolve, .faq:
+    case .statistics, .settings, .aiSummarize, .aiAutoResolve, .aiFAQResolver, .faq:
       EmptyView()
     }
   }
@@ -177,6 +182,7 @@ struct WorkspaceRootView: View {
         canUseMessageTranslations: model.canUseMessageTranslations,
         canUseConversationDraftTranslation: model.canUseConversationDraftTranslation,
         showTranslations: model.showMessageTranslations,
+        showBackendTranslatedSubjects: model.workspaceSettings.showBackendTranslatedSubjects,
         isTranslatingMessages: model.isTranslatingMessages,
         translationErrorMessage: model.translationErrorMessage,
         showInspector: showConversationInspector,
@@ -204,11 +210,17 @@ struct WorkspaceRootView: View {
         generateReplyDraft: { draft in
           await model.generateReplyDraft(from: draft)
         },
-        generateReplyFromFAQ: { faq in
-          await model.generateReplyFromFAQ(using: faq)
+        generateReplyFromFAQ: { faq, conversationID in
+          await model.generateReplyFromFAQ(
+            using: faq,
+            conversationID: conversationID
+          )
         },
-        loadFAQsForConversation: { aiAgentID in
-          try await model.loadFAQEntriesForConversation(aiAgentID: aiAgentID)
+        loadFAQsForConversation: { aiAgentID, forceRefresh in
+          try await model.loadFAQEntriesForConversation(
+            aiAgentID: aiAgentID,
+            forceRefresh: forceRefresh
+          )
         },
         previewDraftTranslation: { text in
           try await model.translateConversationDraftPreview(text)
@@ -334,16 +346,27 @@ struct WorkspaceRootView: View {
         translatedMessagesByID: model.translatedMessagesByID,
         translatedClarification: model.translatedClarification,
         loadState: model.selectedConversationLoadState,
-        timelinePresentation: model.selectedTimelinePresentation(includeDeveloperLogs: model.showDeveloperLogs)
+        timelinePresentation: model.selectedTimelinePresentation(includeDeveloperLogs: model.showDeveloperLogs),
+        onViewContact: { contactID in
+          openContact(contactID)
+        }
       )
       .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
     case .statistics:
-      ConversationStatisticsWorkspaceView(store: model.inboxStore)
+      ConversationStatisticsWorkspaceView(
+        store: model.inboxStore,
+        workspaceChannelFilter: model.workspaceSettings.normalizedChannelFilter
+      )
+    case .settings:
+      WorkspaceSettingsView(model: model)
     case .contacts:
       ContactDetailPrototypeView(
         store: model.contactsStore,
         contact: model.contactsStore.selectedContact,
-        listItem: model.contactsStore.selectedListItem
+        listItem: model.contactsStore.selectedListItem,
+        onShowContactConversations: { contactID in
+          showContactConversations(contactID)
+        }
       )
     case .knowledge:
       KnowledgeDetailView(
@@ -387,6 +410,18 @@ struct WorkspaceRootView: View {
     case .aiSummarize:
       AISummaryWorkspaceView(
         store: model.analyticsStore,
+        availableChannelFilters: {
+          model.availableAnalyticsChannelFilters()
+        },
+        availableMetadataFilters: {
+          model.availableAnalyticsMetadataFilters()
+        },
+        availableAppVersionFilters: {
+          model.availableAnalyticsAppVersionFilters()
+        },
+        availableGameIDFilters: {
+          model.availableAnalyticsGameIDFilters()
+        },
         onGenerateSummary: {
           model.startAnalyticsSummaryGeneration()
         },
@@ -416,6 +451,7 @@ struct WorkspaceRootView: View {
           ? model.selectedSeenData
           : [],
         translatedMessagesByID: model.translatedMessagesByID,
+        showBackendTranslatedSubjects: model.workspaceSettings.showBackendTranslatedSubjects,
         canUseMessageTranslations: model.canUseMessageTranslations,
         showTranslations: model.showMessageTranslations,
         isTranslatingMessages: model.isTranslatingMessages,
@@ -424,6 +460,31 @@ struct WorkspaceRootView: View {
         canLoadMoreTimeline: model.canLoadMoreTimeline,
         isLoadingMoreTimeline: model.isLoadingMoreTimeline,
         canStart: model.canStartAutoResolve,
+        candidateCount: {
+          model.autoResolveCandidateConversations(
+            in: model.autoResolveSourceScope.inboxScope
+          ).count
+        },
+        availableChannelFilters: {
+          model.availableAutoResolveChannelFilters(
+            in: model.autoResolveSourceScope.inboxScope
+          )
+        },
+        availableMetadataFilters: {
+          model.availableAutoResolveMetadataFilters(
+            in: model.autoResolveSourceScope.inboxScope
+          )
+        },
+        availableAppVersionFilters: {
+          model.availableAutoResolveAppVersionFilters(
+            in: model.autoResolveSourceScope.inboxScope
+          )
+        },
+        availableGameIDFilters: {
+          model.availableAutoResolveGameIDFilters(
+            in: model.autoResolveSourceScope.inboxScope
+          )
+        },
         onStart: {
           model.startAutoResolve()
         },
@@ -445,6 +506,114 @@ struct WorkspaceRootView: View {
         onMarkAsSeen: { conversationID in
           await model.markAutoResolveResultSeen(conversationID)
         },
+        onMarkAsUnread: { conversationID in
+          await model.markAutoResolveResultUnread(conversationID)
+        },
+        onMarkAllAsSeen: {
+          await model.markAllUnreadAutoResolveResultsSeen()
+        },
+        onSetShowTranslations: { isEnabled in
+          await model.setShowMessageTranslations(isEnabled)
+        },
+        onLoadMoreTimeline: {
+          Task {
+            await model.loadMoreTimeline()
+          }
+        }
+      )
+    case .aiFAQResolver:
+      AIFAQResolverWorkspaceView(
+        store: model.faqResolverStore,
+        availableAIAgents: model.website?.availableAIAgents ?? [],
+        conversations: model.faqResolverEligibleConversations(),
+        inspectedConversation: model.faqResolverStore.inspectedConversationID == model.selectedConversationID
+          ? model.selectedConversation
+          : nil,
+        inspectedVisitor: model.faqResolverStore.inspectedConversationID == model.selectedConversationID
+          ? model.selectedVisitor
+          : nil,
+        inspectedTimelineItems: model.faqResolverStore.inspectedConversationID == model.selectedConversationID
+          ? model.selectedTimelineItems
+          : [],
+        inspectedSeenData: model.faqResolverStore.inspectedConversationID == model.selectedConversationID
+          ? model.selectedSeenData
+          : [],
+        translatedMessagesByID: model.translatedMessagesByID,
+        showBackendTranslatedSubjects: model.workspaceSettings.showBackendTranslatedSubjects,
+        canUseMessageTranslations: model.canUseMessageTranslations,
+        showTranslations: model.showMessageTranslations,
+        isTranslatingMessages: model.isTranslatingMessages,
+        translationErrorMessage: model.translationErrorMessage,
+        loadState: model.selectedConversationLoadState,
+        canLoadMoreTimeline: model.canLoadMoreTimeline,
+        isLoadingMoreTimeline: model.isLoadingMoreTimeline,
+        canRunFullResolve: model.canRunFAQResolverFullResolve,
+        canRunAutoAssignAll: model.canRunFAQResolverAutoAssignAll,
+        canPreviewDraftTranslations: model.canUseConversationDraftTranslation,
+        autoAssignAllCandidateCount: model.faqResolverAutoAssignAllCandidateConversations().count,
+        availableChannelFilters: {
+          model.availableFAQResolverChannelFilters()
+        },
+        availableMetadataFilters: {
+          model.availableFAQResolverMetadataFilters()
+        },
+        availableAppVersionFilters: {
+          model.availableFAQResolverAppVersionFilters()
+        },
+        availableGameIDFilters: {
+          model.availableFAQResolverGameIDFilters()
+        },
+        onReloadFAQs: {
+          await model.reloadFAQResolverFAQs()
+        },
+        onInspectConversation: { conversationID in
+          await model.inspectFAQResolverConversation(conversationID)
+        },
+        onOpenConversation: { conversationID in
+          openConversation(conversationID, in: .inbox(.all))
+        },
+        onMarkSeen: { conversationID in
+          await model.markConversationRead(conversationID)
+        },
+        onMarkUnseen: { conversationID in
+          await model.markConversationUnread(conversationID)
+        },
+        onResolveInspectorConversation: { conversationID in
+          await model.resolveConversation(conversationID)
+        },
+        onReopenInspectorConversation: { conversationID in
+          await model.reopenConversation(conversationID)
+        },
+        onAutoAssignFAQ: { conversationID in
+          await model.autoAssignFAQResolverFAQs(to: conversationID)
+        },
+        onStartAutoAssignAll: {
+          model.startAutoAssignAllFAQResolverFAQs()
+        },
+        onCancelAutoAssignAll: {
+          model.cancelAutoAssignAllFAQResolverFAQs()
+        },
+        onResolveConversation: { conversationID in
+          await model.resolveFAQResolverConversation(conversationID)
+        },
+        onConfirmConversation: { conversationID in
+          await model.confirmFAQResolverConversation(conversationID)
+        },
+        onResetResolveResult: { conversationID in
+          model.resetFAQResolverResolveResult(conversationID)
+        },
+        onTranslatePendingDrafts: {
+          await model.translateFAQResolverPendingDrafts()
+        },
+        onConfirmAll: {
+          await model.confirmAllFAQResolverConversations()
+        },
+        onStartFullResolve: {
+          model.startFAQResolverFullResolve()
+        },
+        onCancelFullResolve: {
+          model.cancelFAQResolverFullResolve()
+        },
         onSetShowTranslations: { isEnabled in
           await model.setShowMessageTranslations(isEnabled)
         },
@@ -459,6 +628,7 @@ struct WorkspaceRootView: View {
         store: model.faqStore,
         availableAIAgents: model.website?.availableAIAgents ?? [],
         selectedConversation: model.selectedConversation,
+        showBackendTranslatedSubjects: model.workspaceSettings.showBackendTranslatedSubjects,
         canBuildFromConversation: model.faqCanBuildFromConversation,
         onOptimizeDraft: {
           model.startFAQOptimization()
@@ -570,6 +740,16 @@ struct WorkspaceRootView: View {
     model.selectConversation(conversationID)
   }
 
+  private func showContactConversations(_ contactID: String) {
+    setSelectedRoute(.inbox(.all))
+    model.inboxStore.searchText = contactID
+  }
+
+  private func openContact(_ contactID: String) {
+    setSelectedRoute(.contacts)
+    model.selectContact(contactID, in: workspaceStore)
+  }
+
   private var autoSeenTrigger: AutoSeenTrigger {
     AutoSeenTrigger(
       route: activeRoute,
@@ -597,6 +777,22 @@ struct WorkspaceRootView: View {
       }
     } catch {
       model.knowledgeStore.errorMessage = error.localizedDescription
+    }
+  }
+
+  private func exportFAQKnowledge() async {
+    guard let destinationURL = KnowledgeFAQExportFileSaveCoordinator.destinationURL() else {
+      return
+    }
+
+    do {
+      let result = try await model.knowledgeStore.buildFAQExport()
+      try KnowledgeFAQExportFileSaveCoordinator.write(result.json, to: destinationURL)
+      model.knowledgeStore.exportStatusMessage = "Exported \(result.count) FAQ entries."
+    } catch {
+      model.knowledgeStore.exportStatusMessage = nil
+      model.knowledgeStore.errorMessage = error.localizedDescription
+      model.setGlobalErrorMessage(error)
     }
   }
 

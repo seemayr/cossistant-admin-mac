@@ -22,17 +22,28 @@ extension WorkspaceModel {
   }
 
   func generateReplyFromFAQ(
-    using faq: DashboardKnowledge
+    using faq: DashboardKnowledge,
+    conversationID: DashboardConversation.ID
   ) async -> String? {
     errorMessage = nil
-    return await makeConversationExportCoordinator().generateReplyFromFAQ(using: faq)
+    guard selectedConversationID == conversationID else { return nil }
+
+    let draft = await makeConversationExportCoordinator().generateReplyFromFAQ(using: faq)
+    guard selectedConversationID == conversationID else { return nil }
+    return draft
   }
 
   func loadFAQEntriesForConversation(
-    aiAgentID: String?
+    aiAgentID: String?,
+    forceRefresh: Bool = false
   ) async throws -> [DashboardKnowledge] {
     let resolvedAIAgentID = aiAgentID?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
       ?? website?.availableAIAgents.first?.id
+
+    if !forceRefresh,
+       let cachedEntries = conversationStore.cachedFAQEntries(aiAgentID: resolvedAIAgentID) {
+      return cachedEntries
+    }
 
     let agentFilter = resolvedAIAgentID.map(DashboardKnowledgeAIAgentFilter.specific) ?? .all
     var page = 1
@@ -63,6 +74,7 @@ extension WorkspaceModel {
       }
     }
 
+    conversationStore.cacheFAQEntries(uniqueItems, aiAgentID: resolvedAIAgentID)
     return uniqueItems
   }
 

@@ -25,17 +25,11 @@ final class SettingsStore {
   func save() {
     do {
       try configurationStore.saveGlobalSettings(globalSettings)
-      statusMessage = "Saved global service keys."
+      statusMessage = "Saved API keys."
       errorMessage = nil
     } catch {
       statusMessage = nil
       errorMessage = error.localizedDescription
     }
-  }
-
-  func setAutoMarkSeenOnOpen(_ isEnabled: Bool) {
-    globalSettings.autoMarkSeenOnOpen = isEnabled
-    configurationStore.saveAutoMarkSeenOnOpen(isEnabled)
-    statusMessage = nil
   }
 }

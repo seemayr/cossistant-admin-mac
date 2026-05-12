@@ -1,10 +1,12 @@
 import SwiftUI
+import SFSafeSymbols
 import CossistantAdmin
 
 struct LauncherProfileEditorSheet: View {
   @Bindable var store: LauncherStore
   @Binding var isPresented: Bool
   let onSaved: (DashboardProfile.ID) -> Void
+  @State private var showsPrivateAPIKey = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
@@ -32,8 +34,11 @@ struct LauncherProfileEditorSheet: View {
         TextField("https://api.cossistant.com/v1", text: $store.configuration.apiBaseURLString)
           .textFieldStyle(.roundedBorder)
 
-        SecureField("sk_live_...", text: $store.configuration.privateAPIKey)
-          .textFieldStyle(.roundedBorder)
+        ProfileAPIKeyField(
+          placeholder: "sk_live_...",
+          text: $store.configuration.privateAPIKey,
+          isVisible: $showsPrivateAPIKey
+        )
       }
 
       if let errorMessage = store.errorMessage {
@@ -72,5 +77,33 @@ struct LauncherProfileEditorSheet: View {
     .padding(24)
     .frame(minWidth: 460, idealWidth: 520)
     .background(.regularMaterial)
+  }
+}
+
+private struct ProfileAPIKeyField: View {
+  let placeholder: String
+  @Binding var text: String
+  @Binding var isVisible: Bool
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Group {
+        if isVisible {
+          TextField(placeholder, text: $text)
+        } else {
+          SecureField(placeholder, text: $text)
+        }
+      }
+      .textFieldStyle(.roundedBorder)
+
+      Button {
+        isVisible.toggle()
+      } label: {
+        Image(systemSymbol: isVisible ? .eyeSlash : .eye)
+      }
+      .buttonStyle(.borderless)
+      .help(isVisible ? "Hide key" : "Show key")
+      .accessibilityLabel(isVisible ? "Hide key" : "Show key")
+    }
   }
 }

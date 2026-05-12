@@ -1,5 +1,7 @@
+import AppKit
 import SwiftUI
 import SFSafeSymbols
+import UniformTypeIdentifiers
 import CossistantAdmin
 
 private let frontendKnowledgeTypes: [DashboardKnowledgeType] = [.faq, .article]
@@ -8,6 +10,7 @@ struct KnowledgeSectionHeader: View {
   @Bindable var store: KnowledgeStore
   let availableAIAgents: [DashboardWebsite.AIAgent]
   let onCreate: (DashboardKnowledgeType) -> Void
+  let onExportFAQJSON: () async -> Void
 
   private var soleAvailableAIAgentID: String? {
     availableAIAgents.count == 1 ? availableAIAgents.first?.id : nil
@@ -27,20 +30,41 @@ struct KnowledgeSectionHeader: View {
 
         Spacer(minLength: 0)
 
-        Menu {
-          ForEach(frontendKnowledgeTypes) { type in
-            Button("New \(type.label)") {
-              onCreate(type)
+        HStack(spacing: 8) {
+          Button {
+            Task {
+              await onExportFAQJSON()
             }
+          } label: {
+            Label("Export FAQs", systemSymbol: .squareAndArrowDown)
           }
-        } label: {
-          Label("New", systemSymbol: .plus)
+          .disabled(store.isExportingFAQ)
+
+          Menu {
+            ForEach(frontendKnowledgeTypes) { type in
+              Button("New \(type.label)") {
+                onCreate(type)
+              }
+            }
+          } label: {
+            Label("New", systemSymbol: .plus)
+          }
+          .menuStyle(.borderlessButton)
         }
-        .menuStyle(.borderlessButton)
+      }
+
+      if let exportStatusMessage = store.exportStatusMessage {
+        Label(exportStatusMessage, systemSymbol: .checkmarkCircle)
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
 
       VStack(alignment: .leading, spacing: 10) {
-        HStack(spacing: 10) {
+        LazyVGrid(
+          columns: [GridItem(.adaptive(minimum: 150), spacing: 10, alignment: .leading)],
+          alignment: .leading,
+          spacing: 10
+        ) {
           Picker("Type", selection: $store.filterType) {
             Text("All Types")
               .tag(nil as DashboardKnowledgeType?)
@@ -89,13 +113,23 @@ struct KnowledgeSectionHeader: View {
             }
           }
         }
-        HStack(spacing: 10) {
-          Stepper("Page size: \(store.pageSize)", value: $store.pageSize, in: 10...100, step: 10)
+        ViewThatFits(in: .horizontal) {
+          HStack(spacing: 10) {
+            Stepper("Page size: \(store.pageSize)", value: $store.pageSize, in: 10...100, step: 10)
 
-          Spacer(minLength: 0)
+            Spacer(minLength: 0)
 
-          Button("Clear Filters") {
-            store.showAllKnowledge(preferredAIAgentID: soleAvailableAIAgentID)
+            Button("Clear Filters") {
+              store.showAllKnowledge(preferredAIAgentID: soleAvailableAIAgentID)
+            }
+          }
+
+          VStack(alignment: .leading, spacing: 8) {
+            Stepper("Page size: \(store.pageSize)", value: $store.pageSize, in: 10...100, step: 10)
+
+            Button("Clear Filters") {
+              store.showAllKnowledge(preferredAIAgentID: soleAvailableAIAgentID)
+            }
           }
         }
       }
@@ -107,6 +141,44 @@ struct KnowledgeSectionHeader: View {
   }
 }
 
+@MainActor
+enum KnowledgeFAQExportFileSaveCoordinator {
+  static func destinationURL() -> URL? {
+    let panel = NSSavePanel()
+    panel.canCreateDirectories = true
+    panel.isExtensionHidden = false
+    panel.allowedContentTypes = [.json]
+    panel.nameFieldStringValue = defaultFilename
+
+    guard panel.runModal() == .OK else {
+      return nil
+    }
+
+    return panel.url
+  }
+
+  static func write(_ json: String, to destinationURL: URL) throws {
+    guard let data = json.data(using: .utf8) else {
+      throw KnowledgeFAQExportError.invalidEncoding
+    }
+
+    try data.write(to: destinationURL, options: [.atomic])
+  }
+
+  private static var defaultFilename: String {
+    let timestamp = Self.filenameDateFormatter.string(from: .now)
+    return "cossistant-faq-export-\(timestamp).json"
+  }
+
+  private static let filenameDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+    return formatter
+  }()
+}
+
 struct KnowledgeRowView: View {
   let item: DashboardKnowledge
   let aiAgentLabel: String
@@ -115,7 +187,7 @@ struct KnowledgeRowView: View {
     HStack(alignment: .top, spacing: 12) {
       VStack(alignment: .leading, spacing: 6) {
         Text(item.titleText)
-          .font(.headline)
+          .font(.body.weight(.medium))
           .lineLimit(2)
 
         Text(aiAgentLabel)
@@ -131,7 +203,7 @@ struct KnowledgeRowView: View {
           .font(.caption.weight(.semibold))
           .padding(.horizontal, 8)
           .padding(.vertical, 4)
-          .background(.quinary, in: .capsule)
+          .background(.quinary, in: .rect(cornerRadius: 6))
 
         Text(item.isIncluded ? "Included" : "Excluded")
           .font(.caption2)

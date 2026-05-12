@@ -4,12 +4,10 @@ import CossistantAdmin
 struct GlobalServiceSettings: Equatable, Sendable {
   var googleCloudTranslateAPIKey: String
   var openAIAPIKey: String
-  var autoMarkSeenOnOpen: Bool
 
   static let empty = GlobalServiceSettings(
     googleCloudTranslateAPIKey: "",
-    openAIAPIKey: "",
-    autoMarkSeenOnOpen: false
+    openAIAPIKey: ""
   )
 
   var trimmedGoogleCloudTranslateAPIKey: String {

@@ -103,6 +103,41 @@ enum InboxSentimentFilter: String, CaseIterable, Identifiable, Sendable {
   }
 }
 
+enum InboxFAQResolverHandlingFilter: String, CaseIterable, Identifiable, Sendable {
+  case all
+  case current
+  case never
+  case stale
+
+  var id: String { rawValue }
+
+  var label: String {
+    switch self {
+    case .all:
+      "Show All"
+    case .current:
+      "Got FAQ Resolved"
+    case .never:
+      "Never FAQ Resolved"
+    case .stale:
+      "Previously FAQ Resolved"
+    }
+  }
+
+  func includes(_ conversation: DashboardConversation) -> Bool {
+    switch self {
+    case .all:
+      true
+    case .current:
+      conversation.hasCurrentFAQResolverHandling
+    case .never:
+      conversation.faqResolverHandledAtDate == nil
+    case .stale:
+      conversation.hasStaleFAQResolverHandling
+    }
+  }
+}
+
 enum InboxMetadataFilterKey: String, CaseIterable, Identifiable, Sendable {
   case source
   case category
@@ -142,5 +177,55 @@ struct InboxChannelFilterOption: Identifiable, Hashable, Sendable {
 
   var label: String {
     value.replacingOccurrences(of: "_", with: " ").capitalized
+  }
+}
+
+struct InboxAppVersionFilterOption: Identifiable, Hashable, Sendable {
+  let value: String
+
+  var id: String { value }
+  var label: String { value }
+}
+
+extension DashboardConversation {
+  var inboxMetadataSummaryPreviewText: String? {
+    guard case .string(let summary)? = metadata?[AutoResolveMetadataKey.summary] else {
+      return nil
+    }
+
+    return summary
+      .components(separatedBy: .whitespacesAndNewlines)
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
+      .nilIfEmpty
+  }
+
+  var teamActionNeededPreviewText: String? {
+    guard case .string(let teamActionNeeded)? = metadata?[FAQResolverMetadataKey.teamActionNeeded] else {
+      return nil
+    }
+
+    return teamActionNeeded
+      .components(separatedBy: .whitespacesAndNewlines)
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
+      .nilIfEmpty
+  }
+
+  var faqResolverHandledAtDate: Date? {
+    guard case .string(let handledAt)? = metadata?[FAQResolverMetadataKey.handledAt] else {
+      return nil
+    }
+
+    return DashboardTimestampParser.date(from: handledAt)
+  }
+
+  var hasCurrentFAQResolverHandling: Bool {
+    guard let faqResolverHandledAtDate else { return false }
+    return faqResolverHandledAtDate.timeIntervalSince(latestActivityDate) >= -1
+  }
+
+  var hasStaleFAQResolverHandling: Bool {
+    faqResolverHandledAtDate != nil && !hasCurrentFAQResolverHandling
   }
 }

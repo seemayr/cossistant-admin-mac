@@ -42,7 +42,17 @@ extension WorkspaceModel {
     globalSettings = sessionCoordinator.loadGlobalSettings()
     analyticsStore.hasOpenAIAPIKey = globalSettings.hasOpenAIAPIKey
     autoResolveStore.hasOpenAIAPIKey = globalSettings.hasOpenAIAPIKey
+    faqResolverStore.hasOpenAIAPIKey = globalSettings.hasOpenAIAPIKey
     faqStore.hasOpenAIAPIKey = globalSettings.hasOpenAIAPIKey
+  }
+
+  func reloadGlobalSettingsAndRefreshTranslations() async {
+    reloadGlobalSettings()
+
+    guard showMessageTranslations else { return }
+    translatedMessagesByID = [:]
+    translatedClarification = nil
+    await loadTranslationsForSelectedConversationIfNeeded(force: true)
   }
 
   func saveGlobalSettings() {
@@ -51,6 +61,7 @@ extension WorkspaceModel {
       globalSettingsStatusMessage = "Saved global service keys."
       analyticsStore.hasOpenAIAPIKey = globalSettings.hasOpenAIAPIKey
       autoResolveStore.hasOpenAIAPIKey = globalSettings.hasOpenAIAPIKey
+      faqResolverStore.hasOpenAIAPIKey = globalSettings.hasOpenAIAPIKey
       faqStore.hasOpenAIAPIKey = globalSettings.hasOpenAIAPIKey
       translationErrorMessage = nil
       replyDraftErrorMessage = nil
@@ -58,12 +69,6 @@ extension WorkspaceModel {
       globalSettingsStatusMessage = nil
       setGlobalErrorMessage(error)
     }
-  }
-
-  func setAutoMarkSeenOnOpen(_ isEnabled: Bool) {
-    globalSettings.autoMarkSeenOnOpen = isEnabled
-    sessionCoordinator.saveAutoMarkSeenOnOpen(isEnabled)
-    globalSettingsStatusMessage = nil
   }
 
   func connect(profileID: DashboardProfile.ID) async {
@@ -81,6 +86,8 @@ extension WorkspaceModel {
       configuration = context.configuration
       inboxStore.setConfiguration(context.configuration)
       currentProfileID = context.profile.id
+      workspaceSettings = sessionCoordinator.loadWorkspaceSettings(profileID: context.profile.id)
+      applyWorkspaceConversationFilterDefaults()
       website = context.bootstrap.website
       organization = context.bootstrap.organization
       inboxStore.applyBootstrap(context.bootstrap.inbox)
@@ -119,6 +126,51 @@ extension WorkspaceModel {
       }
       setGlobalErrorMessage(error)
     }
+  }
+
+  func saveWorkspaceSettings() {
+    guard let currentProfileID else { return }
+
+    do {
+      try sessionCoordinator.saveWorkspaceSettings(workspaceSettings, profileID: currentProfileID)
+      applyWorkspaceConversationFilterDefaults()
+      globalSettingsStatusMessage = nil
+    } catch {
+      setGlobalErrorMessage(error)
+    }
+  }
+
+  func setWorkspaceChannelFilter(_ channelFilter: String?) {
+    workspaceSettings.channelFilter = channelFilter?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    saveWorkspaceSettings()
+  }
+
+  func setWorkspaceAutoMarkSeenOnOpen(_ isEnabled: Bool) {
+    workspaceSettings.autoMarkSeenOnOpen = isEnabled
+    saveWorkspaceSettings()
+  }
+
+  func setWorkspaceShowBackendTranslatedSubjects(_ isEnabled: Bool) {
+    workspaceSettings.showBackendTranslatedSubjects = isEnabled
+    saveWorkspaceSettings()
+  }
+
+  func setWorkspaceShowBackendTranslatedMessages(_ isEnabled: Bool) async {
+    workspaceSettings.showBackendTranslatedMessages = isEnabled
+    saveWorkspaceSettings()
+
+    guard showMessageTranslations else { return }
+    translatedMessagesByID = [:]
+    translatedClarification = nil
+    await loadTranslationsForSelectedConversationIfNeeded(force: true)
+  }
+
+  func applyWorkspaceConversationFilterDefaults() {
+    let channelFilter = workspaceSettings.normalizedChannelFilter
+    inboxStore.applyWorkspaceChannelFilter(channelFilter)
+    analyticsStore.applyWorkspaceChannelFilter(channelFilter)
+    autoResolveStore.applyWorkspaceChannelFilter(channelFilter)
+    faqResolverStore.applyWorkspaceChannelFilter(channelFilter)
   }
 
   func refresh() async {

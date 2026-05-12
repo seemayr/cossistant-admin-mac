@@ -58,11 +58,6 @@ extension WorkspaceModel {
     set { inboxStore.loadedPageCount = newValue }
   }
 
-  var visitorSearchIndex: [String: String] {
-    get { inboxStore.visitorSearchIndex }
-    set { inboxStore.visitorSearchIndex = newValue }
-  }
-
   var isLoadingMore: Bool {
     get { inboxStore.isLoadingMore }
     set { inboxStore.isLoadingMore = newValue }

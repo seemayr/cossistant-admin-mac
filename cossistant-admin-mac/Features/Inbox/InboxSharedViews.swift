@@ -9,12 +9,13 @@ struct HeaderControlLabel: View {
 
   var body: some View {
     Label(value, systemSymbol: systemImage)
-      .font(.subheadline.weight(.medium))
+      .font(.caption.weight(.medium))
       .lineLimit(1)
-    .padding(.horizontal, 10)
-    .padding(.vertical, 6)
-    .background(.quinary.opacity(0.8), in: .rect(cornerRadius: 12))
-    .help(title)
+      .truncationMode(.tail)
+      .padding(.horizontal, 9)
+      .padding(.vertical, 5)
+      .background(.quinary.opacity(0.8), in: .rect(cornerRadius: 7))
+      .help(title)
   }
 }
 
@@ -35,7 +36,7 @@ struct RowTag: View {
     .font(.caption2.weight(.semibold))
     .padding(.horizontal, 8)
     .padding(.vertical, 4)
-    .background(tint.opacity(0.12), in: .capsule)
+    .background(tint.opacity(0.12), in: .rect(cornerRadius: 6))
     .foregroundStyle(tint)
   }
 }

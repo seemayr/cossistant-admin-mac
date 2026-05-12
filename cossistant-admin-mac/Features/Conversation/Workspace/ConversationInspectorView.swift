@@ -13,6 +13,7 @@ struct ConversationInspectorView: View {
   let showDeveloperLogs: Bool
   let seenDebugState: ConversationSeenDebugState
   let onUpdateConversationMetadata: @MainActor (DashboardMetadata) async throws -> Void
+  let onViewContact: (String) -> Void
 
   var body: some View {
     ScrollView {
@@ -48,17 +49,19 @@ struct ConversationInspectorView: View {
           }
 
           HStack(spacing: 8) {
-            WorkspaceInlineBadge(
-              title: visitor?.isBlocked == true || conversation.visitor.isBlocked
-                ? "Blocked"
-                : visitorPresence?.isActive == true ? "Active now" : "Inactive",
-              systemImage: visitor?.isBlocked == true || conversation.visitor.isBlocked
-                ? .handRaisedFill
-                : visitorPresence?.isActive == true ? .dotRadiowavesLeftAndRight : .personCropCircleBadgeCheckmark,
-              tint: visitor?.isBlocked == true || conversation.visitor.isBlocked
-                ? .red
-                : visitorPresence?.isActive == true ? .green : .secondary
-            )
+            if isVisitorBlocked {
+              WorkspaceInlineBadge(
+                title: "Blocked",
+                systemImage: .handRaisedFill,
+                tint: .red
+              )
+            } else if visitorPresence?.isActive == true {
+              WorkspaceInlineBadge(
+                title: "Active now",
+                systemImage: .dotRadiowavesLeftAndRight,
+                tint: .green
+              )
+            }
 
             if let location = visitorLocation {
               WorkspaceInlineBadge(
@@ -66,6 +69,16 @@ struct ConversationInspectorView: View {
                 systemImage: .location,
                 tint: .secondary
               )
+            }
+
+            if let contactID {
+              Button {
+                onViewContact(contactID)
+              } label: {
+                Image(systemSymbol: .personCropCircle)
+              }
+              .accessibilityLabel("View Contact")
+              .help("View Contact")
             }
           }
         }
@@ -152,26 +165,22 @@ struct ConversationInspectorView: View {
         }
 
         if let visitor {
-          InspectorCard {
-            VStack(alignment: .leading, spacing: 16) {
-              InspectorCard(title: "Visitor") {
-                InspectorFieldList(rows: [
-                  ("Created", absoluteTime(for: visitor.createdAt) ?? visitor.createdAt),
-                  ("Updated", absoluteTime(for: visitor.updatedAt) ?? visitor.updatedAt),
-                  ("Last Seen", absoluteTime(for: visitor.lastSeenAt) ?? "Not seen yet"),
-                ])
-              }
+          InspectorCard(title: "Visitor") {
+            InspectorFieldList(rows: [
+              ("Created", absoluteTime(for: visitor.createdAt) ?? visitor.createdAt),
+              ("Updated", absoluteTime(for: visitor.updatedAt) ?? visitor.updatedAt),
+              ("Last Seen", absoluteTime(for: visitor.lastSeenAt) ?? "Not seen yet"),
+            ])
+          }
 
-              InspectorCard(title: "Device") {
-                InspectorFieldList(rows: [
-                  ("Device", [visitor.device, visitor.deviceType].compactMap { $0 }.joined(separator: " • ").nilIfEmpty ?? "Unknown"),
-                  ("OS", [visitor.os, visitor.osVersion].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "Unknown"),
-                  ("Browser", [visitor.browser, visitor.browserVersion].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "Unknown"),
-                  ("Language", visitor.language ?? "Unknown"),
-                  ("Timezone", visitor.timezone ?? "Unknown"),
-                ])
-              }
-            }
+          InspectorCard(title: "Device") {
+            InspectorFieldList(rows: [
+              ("Device", [visitor.device, visitor.deviceType].compactMap { $0 }.joined(separator: " • ").nilIfEmpty ?? "Unknown"),
+              ("OS", [visitor.os, visitor.osVersion].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "Unknown"),
+              ("Browser", [visitor.browser, visitor.browserVersion].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? "Unknown"),
+              ("Language", visitor.language ?? "Unknown"),
+              ("Timezone", visitor.timezone ?? "Unknown"),
+            ])
           }
         }
       }
@@ -190,6 +199,14 @@ struct ConversationInspectorView: View {
       .compactMap { $0?.nilIfEmpty }
       .joined(separator: ", ")
       .nilIfEmpty
+  }
+
+  private var contactID: String? {
+    visitor?.contact?.id ?? conversation.visitor.contact?.id
+  }
+
+  private var isVisitorBlocked: Bool {
+    visitor?.isBlocked == true || conversation.visitor.isBlocked
   }
 
   private var ratingText: String {

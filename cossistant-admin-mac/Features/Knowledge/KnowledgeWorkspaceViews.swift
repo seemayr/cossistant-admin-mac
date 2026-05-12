@@ -7,6 +7,7 @@ struct KnowledgeListView: View {
   let availableAIAgents: [DashboardWebsite.AIAgent]
   @Binding var selection: String?
   let onCreate: (DashboardKnowledgeType) -> Void
+  let onExportFAQJSON: () async -> Void
   let onEdit: (DashboardKnowledge) -> Void
   let onDelete: (DashboardKnowledge) async -> Void
 
@@ -17,7 +18,8 @@ struct KnowledgeListView: View {
       KnowledgeSectionHeader(
         store: store,
         availableAIAgents: availableAIAgents,
-        onCreate: onCreate
+        onCreate: onCreate,
+        onExportFAQJSON: onExportFAQJSON
       )
 
       List(store.filteredItems, selection: $selection) { item in
@@ -25,7 +27,7 @@ struct KnowledgeListView: View {
           item: item,
           aiAgentLabel: aiAgentLabel(for: item.aiAgentId)
         )
-          .padding(.vertical, 4)
+          .padding(.vertical, 3)
           .tag(item.id)
           .contextMenu {
             Button("Edit") {
@@ -37,6 +39,7 @@ struct KnowledgeListView: View {
             }
           }
       }
+      .listStyle(.inset(alternatesRowBackgrounds: false))
       .overlay {
         if !store.hasLoadedListOnce && store.items.isEmpty {
           ProgressView("Loading knowledge…")
@@ -80,6 +83,7 @@ struct KnowledgeListView: View {
       KnowledgePaginationFooter(store: store)
     }
     .searchable(text: $store.searchText, prompt: "Search knowledge titles")
+    .navigationTitle("Knowledge")
   }
 
   private func aiAgentLabel(for aiAgentID: String?) -> String {
@@ -193,7 +197,8 @@ struct KnowledgeDetailView: View {
             }
           }
           .padding(24)
-          .frame(maxWidth: .infinity, alignment: .leading)
+          .frame(maxWidth: 980, alignment: .leading)
+          .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .confirmationDialog(
           "Delete knowledge entry?",

@@ -24,6 +24,7 @@ struct AIAgentListView: View {
       .padding(.vertical, 4)
       .tag(agent.id)
     }
+    .listStyle(.inset(alternatesRowBackgrounds: false))
     .overlay {
       if agents.isEmpty {
         ContentUnavailableView(
@@ -33,6 +34,7 @@ struct AIAgentListView: View {
         )
       }
     }
+    .navigationTitle("AI Agents")
   }
 
   @ViewBuilder
@@ -105,7 +107,8 @@ struct AIAgentDetailView: View {
             }
           }
           .padding(24)
-          .frame(maxWidth: .infinity, alignment: .leading)
+          .frame(maxWidth: 980, alignment: .leading)
+          .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .task(id: pollingKey) {
           guard let agentID = store.selectedAIAgent?.id,
@@ -236,6 +239,7 @@ struct AIAgentDetailView: View {
             .controlSize(.small)
         }
       }
+      .lineLimit(1)
 
       ProgressView(value: Double(trainingStatus.progress), total: 100) {
         Text("Progress")

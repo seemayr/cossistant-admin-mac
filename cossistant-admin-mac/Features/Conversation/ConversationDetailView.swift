@@ -24,6 +24,7 @@ struct ConversationDetailView: View {
   let translatedClarification: DashboardMessageTranslation?
   let loadState: ConversationSelectionLoadState
   let timelinePresentation: DashboardTimelinePresentationBundle?
+  let onViewContact: (String) -> Void
 
   var body: some View {
     Group {
@@ -49,7 +50,8 @@ struct ConversationDetailView: View {
           translatedMessagesByID: translatedMessagesByID,
           translatedClarification: translatedClarification,
           loadState: loadState,
-          timelinePresentation: timelinePresentation
+          timelinePresentation: timelinePresentation,
+          onViewContact: onViewContact
         )
       } else {
         ContentUnavailableView(

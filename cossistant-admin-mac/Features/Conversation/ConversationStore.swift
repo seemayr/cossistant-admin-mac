@@ -30,9 +30,11 @@ final class ConversationStore {
   var translatedClarification: DashboardMessageTranslation?
   var translationErrorMessage: String?
   var replyDraftErrorMessage: String?
+  private var cachedFAQEntriesByAIAgentID: [String: [DashboardKnowledge]] = [:]
 
   func reset() {
     clearSelection()
+    cachedFAQEntriesByAIAgentID = [:]
     typingEventsByConversationID = [:]
     aiProcessingByConversationID = [:]
   }
@@ -232,8 +234,23 @@ final class ConversationStore {
     }
   }
 
+  func cachedFAQEntries(aiAgentID: String?) -> [DashboardKnowledge]? {
+    cachedFAQEntriesByAIAgentID[Self.faqCacheKey(aiAgentID)]
+  }
+
+  func cacheFAQEntries(
+    _ entries: [DashboardKnowledge],
+    aiAgentID: String?
+  ) {
+    cachedFAQEntriesByAIAgentID[Self.faqCacheKey(aiAgentID)] = entries
+  }
+
   private func invalidateTimelinePresentation() {
     selectedTimelinePresentation = nil
     selectedTimelinePresentationWithDeveloperLogs = nil
+  }
+
+  private static func faqCacheKey(_ aiAgentID: String?) -> String {
+    aiAgentID ?? "__all_ai_agents__"
   }
 }

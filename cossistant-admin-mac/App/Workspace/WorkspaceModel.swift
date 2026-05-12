@@ -20,6 +20,7 @@ final class WorkspaceModel {
   let autoResolveStore: AutoResolveStore
   let contactsStore: ContactsStore
   let conversationStore: ConversationStore
+  let faqResolverStore: FAQResolverStore
   let faqStore: FAQStore
   let inboxStore: InboxStore
   let knowledgeStore: KnowledgeStore
@@ -29,6 +30,7 @@ final class WorkspaceModel {
   var currentProfileID: DashboardProfile.ID?
   var website: DashboardWebsite?
   var organization: DashboardOrganization?
+  var workspaceSettings: WorkspaceSettings = .empty
   var selectedConversationID: DashboardConversation.ID?
   var visitorPresenceByID: [String: DashboardVisitorPresence] = [:]
   var currentActorUserID: String?
@@ -63,6 +65,7 @@ final class WorkspaceModel {
     self.autoResolveStore = AutoResolveStore()
     self.contactsStore = ContactsStore()
     self.conversationStore = ConversationStore()
+    self.faqResolverStore = FAQResolverStore()
     self.faqStore = FAQStore()
     self.inboxStore = InboxStore()
     self.knowledgeStore = KnowledgeStore()
@@ -70,6 +73,7 @@ final class WorkspaceModel {
     self.profiles = sessionCoordinator.loadProfiles()
     self.analyticsStore.hasOpenAIAPIKey = self.globalSettings.hasOpenAIAPIKey
     self.autoResolveStore.hasOpenAIAPIKey = self.globalSettings.hasOpenAIAPIKey
+    self.faqResolverStore.hasOpenAIAPIKey = self.globalSettings.hasOpenAIAPIKey
     self.faqStore.hasOpenAIAPIKey = self.globalSettings.hasOpenAIAPIKey
   }
 
@@ -91,6 +95,7 @@ final class WorkspaceModel {
     currentProfileID = nil
     website = nil
     organization = nil
+    workspaceSettings = .empty
     inboxStore.reset()
     inboxStore.setConfiguration(nil)
     selectedConversationID = nil
@@ -99,7 +104,9 @@ final class WorkspaceModel {
     contactsStore.setConfiguration(nil)
     knowledgeStore.setConfiguration(nil)
     aiAgentStore.setConfiguration(nil)
+    faqResolverStore.reset()
     conversationStore.reset()
+    applyWorkspaceConversationFilterDefaults()
     visitorPresenceByID = [:]
     realtimeConnectionState = .disconnected
     lastRealtimeEventDate = nil

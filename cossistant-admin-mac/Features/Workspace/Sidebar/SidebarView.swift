@@ -59,7 +59,10 @@ struct SidebarView: View {
     Section("Inbox") {
       ForEach(inboxStore.filteredConversations) { conversation in
         NavigationLink(value: conversation.id) {
-          ConversationRowView(conversation: conversation)
+          ConversationRowView(
+            conversation: conversation,
+            showBackendTranslatedSubjects: model.workspaceSettings.showBackendTranslatedSubjects
+          )
         }
       }
 
@@ -107,11 +110,12 @@ private struct SidebarStatRow: View {
 
 private struct ConversationRowView: View {
   let conversation: DashboardConversation
+  let showBackendTranslatedSubjects: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text(conversation.displayTitle)
+        Text(conversation.displayTitle(showBackendTranslatedSubjects: showBackendTranslatedSubjects))
           .font(.headline)
           .lineLimit(1)
 

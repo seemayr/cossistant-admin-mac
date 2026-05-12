@@ -68,9 +68,9 @@ enum InboxScope: String, CaseIterable, Identifiable, Hashable {
     case .unseen:
       .eyeSlash
     case .updated:
-      .clockArrowTriangleheadCounterclockwiseRotate90
-    case .open:
       .bubbleLeftAndBubbleRight
+    case .open:
+      .message
     case .humanIntervention:
       .handRaised
     case .clarification:
@@ -115,9 +115,11 @@ enum WorkspaceRoute: Hashable {
   case statistics
   case contacts
   case knowledge
+  case settings
   case aiAgents
   case aiSummarize
   case aiAutoResolve
+  case aiFAQResolver
   case faq
 
   var title: String {
@@ -130,12 +132,16 @@ enum WorkspaceRoute: Hashable {
       "Contacts"
     case .knowledge:
       "Knowledge"
+    case .settings:
+      "Settings"
     case .aiAgents:
       "AI Agents"
     case .aiSummarize:
       "Summarize"
     case .aiAutoResolve:
       "Auto-Resolve"
+    case .aiFAQResolver:
+      "FAQ Resolver"
     case .faq:
       "FAQ"
     }
@@ -151,12 +157,16 @@ enum WorkspaceRoute: Hashable {
       .person2
     case .knowledge:
       .booksVertical
+    case .settings:
+      .gearshape
     case .aiAgents:
       .sparkles
     case .aiSummarize:
       .chartXyaxisLine
     case .aiAutoResolve:
       .sparkles
+    case .aiFAQResolver:
+      .questionmarkBubble
     case .faq:
       .questionmarkBubble
     }

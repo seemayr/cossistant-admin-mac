@@ -65,42 +65,10 @@ struct ContactsSectionHeader: View {
         .font(.caption)
         .foregroundStyle(.secondary)
 
-      HStack(spacing: 10) {
-        Menu {
-          Picker("Sort by", selection: $store.sortBy) {
-            ForEach(DashboardContactSortBy.allCases) { sortBy in
-              Text(sortBy.label)
-                .tag(sortBy)
-            }
-          }
-
-          Picker("Order", selection: $store.sortOrder) {
-            ForEach(DashboardSortOrder.allCases) { sortOrder in
-              Text(sortOrder.label)
-                .tag(sortOrder)
-            }
-          }
-        } label: {
-          ContactsHeaderControlLabel(
-            title: "Sort",
-            value: store.sortBy.label,
-            systemImage: .arrowUpArrowDown
-          )
-        }
-
-        Menu {
-          Picker("Visitors", selection: $store.visitorStatus) {
-            ForEach(DashboardContactVisitorStatus.allCases) { status in
-              Text(status.label)
-                .tag(status)
-            }
-          }
-        } label: {
-          ContactsHeaderControlLabel(
-            title: "Visitors",
-            value: store.visitorStatus.label,
-            systemImage: .person2
-          )
+      ViewThatFits(in: .horizontal) {
+        controlRow
+        ScrollView(.horizontal, showsIndicators: false) {
+          controlRow
         }
       }
       .padding(.top, 4)
@@ -110,20 +78,45 @@ struct ContactsSectionHeader: View {
     .padding(.vertical, 12)
     .background(.bar)
   }
-}
 
-struct ContactsHeaderControlLabel: View {
-  let title: String
-  let value: String
-  let systemImage: SFSymbol
+  private var controlRow: some View {
+    HStack(spacing: 8) {
+      Menu {
+        Picker("Sort by", selection: $store.sortBy) {
+          ForEach(DashboardContactSortBy.allCases) { sortBy in
+            Text(sortBy.label)
+              .tag(sortBy)
+          }
+        }
 
-  var body: some View {
-    Label(value, systemSymbol: systemImage)
-      .font(.subheadline.weight(.medium))
-      .lineLimit(1)
-    .padding(.horizontal, 10)
-    .padding(.vertical, 6)
-    .background(.quinary.opacity(0.8), in: .rect(cornerRadius: 12))
-    .help(title)
+        Picker("Order", selection: $store.sortOrder) {
+          ForEach(DashboardSortOrder.allCases) { sortOrder in
+            Text(sortOrder.label)
+              .tag(sortOrder)
+          }
+        }
+      } label: {
+        HeaderControlLabel(
+          title: "Sort",
+          value: store.sortBy.label,
+          systemImage: .arrowUpArrowDown
+        )
+      }
+
+      Menu {
+        Picker("Visitors", selection: $store.visitorStatus) {
+          ForEach(DashboardContactVisitorStatus.allCases) { status in
+            Text(status.label)
+              .tag(status)
+          }
+        }
+      } label: {
+        HeaderControlLabel(
+          title: "Visitors",
+          value: store.visitorStatus.label,
+          systemImage: .person2
+        )
+      }
+    }
   }
 }

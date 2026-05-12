@@ -24,6 +24,9 @@ final class AppConfigurationStore {
     static let profilesKey = "dashboard.profiles"
     static let lastUsedProfileIDKey = "dashboard.last-used-profile-id"
     static let autoMarkSeenOnOpenKey = "dashboard.auto-mark-seen-on-open"
+    static let showBackendTranslatedSubjectsKey = "dashboard.show-backend-translated-subjects"
+    static let showBackendTranslatedMessagesKey = "dashboard.show-backend-translated-messages"
+    static let workspaceSettingsKeyPrefix = "dashboard.workspace-settings"
     static let googleCloudTranslateAPIKeyAccount = "global.google-cloud-translate"
     static let openAIAPIKeyAccount = "global.openai"
   }
@@ -96,6 +99,8 @@ final class AppConfigurationStore {
     if defaults.string(forKey: Constants.lastUsedProfileIDKey) == id {
       defaults.removeObject(forKey: Constants.lastUsedProfileIDKey)
     }
+
+    defaults.removeObject(forKey: workspaceSettingsKey(profileID: id))
   }
 
   func lastUsedProfileID() -> String? {
@@ -117,8 +122,7 @@ final class AppConfigurationStore {
       ) ?? "",
       openAIAPIKey: try globalSecretStore.load(
         account: Constants.openAIAPIKeyAccount
-      ) ?? "",
-      autoMarkSeenOnOpen: defaults.object(forKey: Constants.autoMarkSeenOnOpenKey) as? Bool ?? false
+      ) ?? ""
     )
   }
 
@@ -131,12 +135,44 @@ final class AppConfigurationStore {
       settings.trimmedOpenAIAPIKey,
       account: Constants.openAIAPIKeyAccount
     )
-    defaults.set(settings.autoMarkSeenOnOpen, forKey: Constants.autoMarkSeenOnOpenKey)
+    NotificationCenter.default.post(name: .globalServiceSettingsDidChange, object: nil)
   }
 
-  func saveAutoMarkSeenOnOpen(_ isEnabled: Bool) {
-    defaults.set(isEnabled, forKey: Constants.autoMarkSeenOnOpenKey)
+  func loadWorkspaceSettings(profileID: DashboardProfile.ID) throws -> WorkspaceSettings {
+    if let data = defaults.data(forKey: workspaceSettingsKey(profileID: profileID)) {
+      return try JSONDecoder().decode(WorkspaceSettings.self, from: data)
+    }
+
+    return WorkspaceSettings(
+      channelFilter: nil,
+      autoMarkSeenOnOpen: defaults.object(forKey: Constants.autoMarkSeenOnOpenKey) as? Bool ?? false,
+      showBackendTranslatedSubjects: defaults.object(forKey: Constants.showBackendTranslatedSubjectsKey) as? Bool ?? true,
+      showBackendTranslatedMessages: defaults.object(forKey: Constants.showBackendTranslatedMessagesKey) as? Bool ?? true
+    )
   }
+
+  func saveWorkspaceSettings(
+    _ settings: WorkspaceSettings,
+    profileID: DashboardProfile.ID
+  ) throws {
+    let data = try JSONEncoder().encode(settings)
+    defaults.set(data, forKey: workspaceSettingsKey(profileID: profileID))
+    NotificationCenter.default.post(name: .workspaceSettingsDidChange, object: profileID)
+  }
+
+  private func workspaceSettingsKey(profileID: DashboardProfile.ID) -> String {
+    "\(Constants.workspaceSettingsKeyPrefix).\(profileID)"
+  }
+}
+
+extension Notification.Name {
+  static let globalServiceSettingsDidChange = Notification.Name(
+    "earth.mizo.cossistant-admin-mac.global-service-settings-did-change"
+  )
+
+  static let workspaceSettingsDidChange = Notification.Name(
+    "earth.mizo.cossistant-admin-mac.workspace-settings-did-change"
+  )
 }
 
 struct GlobalSecretStore {

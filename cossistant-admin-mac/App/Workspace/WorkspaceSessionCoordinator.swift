@@ -35,8 +35,15 @@ final class WorkspaceSessionCoordinator {
     try configurationStore.saveGlobalSettings(settings)
   }
 
-  func saveAutoMarkSeenOnOpen(_ isEnabled: Bool) {
-    configurationStore.saveAutoMarkSeenOnOpen(isEnabled)
+  func loadWorkspaceSettings(profileID: DashboardProfile.ID) -> WorkspaceSettings {
+    (try? configurationStore.loadWorkspaceSettings(profileID: profileID)) ?? .empty
+  }
+
+  func saveWorkspaceSettings(
+    _ settings: WorkspaceSettings,
+    profileID: DashboardProfile.ID
+  ) throws {
+    try configurationStore.saveWorkspaceSettings(settings, profileID: profileID)
   }
 
   func setLastUsedProfileID(_ profileID: DashboardProfile.ID?) {

@@ -9,6 +9,8 @@ extension WorkspaceModel {
       await refresh()
     case .statistics:
       await refresh()
+    case .settings:
+      break
     case .contacts:
       await contactsStore.refresh()
       if let selectedContactID = workspaceStore.selectedContactID {
@@ -30,6 +32,8 @@ extension WorkspaceModel {
       break
     case .aiAutoResolve:
       break
+    case .aiFAQResolver:
+      await reloadFAQResolverFAQs()
     }
   }
 
@@ -38,6 +42,8 @@ extension WorkspaceModel {
     case .inbox:
       break
     case .statistics:
+      break
+    case .settings:
       break
     case .contacts:
       guard modelCanRefreshContactsList else { return }
@@ -61,6 +67,11 @@ extension WorkspaceModel {
       break
     case .aiAutoResolve:
       break
+    case .aiFAQResolver:
+      ensureFAQResolverAIAgentSelection()
+      if faqResolverStore.faqEntries.isEmpty {
+        await reloadFAQResolverFAQs()
+      }
     }
   }
 

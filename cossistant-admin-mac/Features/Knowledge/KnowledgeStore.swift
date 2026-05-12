@@ -72,7 +72,9 @@ final class KnowledgeStore {
   }
   var isLoadingList = false
   var isLoadingDetail = false
+  var isExportingFAQ = false
   var errorMessage: String?
+  var exportStatusMessage: String?
 
   var filteredItems: [DashboardKnowledge] {
     let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -118,6 +120,7 @@ final class KnowledgeStore {
     filterSpecificAIAgentID = nil
     filterLinkSourceID = nil
     errorMessage = nil
+    exportStatusMessage = nil
   }
 
   func showAllKnowledge(
@@ -270,6 +273,61 @@ final class KnowledgeStore {
       page = 1
     }
   }
+
+  func buildFAQExport() async throws -> KnowledgeFAQExportResult {
+    guard !isExportingFAQ else {
+      throw KnowledgeFAQExportError.exportAlreadyRunning
+    }
+
+    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let client = try backendClient()
+    var page = 1
+    var hasMore = true
+    var entries: [KnowledgeFAQExportEntry] = []
+    var seenIDs = Set<String>()
+
+    errorMessage = nil
+    exportStatusMessage = "Exporting FAQ entries..."
+    isExportingFAQ = true
+    defer { isExportingFAQ = false }
+
+    while hasMore {
+      let response = try await client.knowledge.listKnowledge(
+        page: page,
+        limit: 100,
+        type: .faq,
+        aiAgentFilter: resolvedAIAgentFilter,
+        isIncluded: filterIncluded,
+        linkSourceID: filterLinkSourceID
+      )
+
+      for item in response.items where seenIDs.insert(item.id).inserted {
+        guard let payload = item.faqPayload else { continue }
+        guard query.isEmpty || item.titleText.localizedCaseInsensitiveContains(query) else { continue }
+        entries.append(
+          KnowledgeFAQExportEntry(
+            question: payload.question,
+            categories: payload.categories,
+            relatedQuestions: payload.relatedQuestions,
+            answer: payload.answer
+          )
+        )
+      }
+
+      hasMore = response.pagination.hasMore
+      page += 1
+    }
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+    let data = try encoder.encode(entries)
+    guard let json = String(data: data, encoding: .utf8) else {
+      throw KnowledgeFAQExportError.invalidEncoding
+    }
+
+    return KnowledgeFAQExportResult(json: json, count: entries.count)
+  }
+
   private var resolvedAIAgentFilter: DashboardKnowledgeAIAgentFilter {
     switch filterAIAgentScope {
     case .all:
@@ -329,6 +387,32 @@ final class KnowledgeStore {
     suppressAutomaticRefresh = false
     if refreshAfterUpdate {
       scheduleRefresh(page: 1)
+    }
+  }
+}
+
+struct KnowledgeFAQExportResult: Sendable {
+  let json: String
+  let count: Int
+}
+
+struct KnowledgeFAQExportEntry: Encodable, Sendable {
+  let question: String
+  let categories: [String]
+  let relatedQuestions: [String]
+  let answer: String
+}
+
+enum KnowledgeFAQExportError: LocalizedError {
+  case exportAlreadyRunning
+  case invalidEncoding
+
+  var errorDescription: String? {
+    switch self {
+    case .exportAlreadyRunning:
+      "An FAQ export is already running."
+    case .invalidEncoding:
+      "The FAQ export could not be encoded as UTF-8 JSON."
     }
   }
 }

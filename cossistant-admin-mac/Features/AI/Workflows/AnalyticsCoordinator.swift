@@ -52,6 +52,8 @@ final class AnalyticsCoordinator {
     }
 
     store.isGeneratingSummary = true
+    let contextDescription = analyticsContextDescription(for: dateRange)
+    let filterDescription = analyticsFilterDescription()
     store.summaryErrorMessage = nil
     store.summaryStatusMessage = "Loading conversations…"
     store.summaryMessages = []
@@ -61,16 +63,19 @@ final class AnalyticsCoordinator {
     store.sourceDocument = nil
     store.summaryResponseID = nil
     store.summaryGeneratedAt = nil
-    store.summaryRangeLabel = dateRange.label
+    store.summaryRangeLabel = contextDescription
     store.summaryUsedChunking = false
     defer { store.isGeneratingSummary = false }
 
     do {
-      let corpus = try await buildConversationCorpus(in: dateRange)
+      let corpus = try await buildConversationCorpus(
+        in: dateRange,
+        filterDescription: filterDescription
+      )
       store.conversationCount = corpus.conversationCount
       store.sourceMessageCount = corpus.messageCount
       store.sourceDocument = corpus.document
-      store.summaryRangeLabel = dateRange.label
+      store.summaryRangeLabel = contextDescription
 
       let client = OpenAIAnalyticsSummaryClient(apiKey: openAIAPIKey)
       let turn: OpenAIAnalyticsTurn
@@ -80,7 +85,7 @@ final class AnalyticsCoordinator {
         turn = try await client.startSummaryConversation(
           sourceDocument: chunk,
           workspaceName: workspaceName,
-          rangeDescription: dateRange.label,
+          rangeDescription: contextDescription,
           conversationCount: corpus.conversationCount,
           messageCount: corpus.messageCount
         )
@@ -93,7 +98,7 @@ final class AnalyticsCoordinator {
           let summary = try await client.summarizeChunk(
             sourceDocument: chunk,
             workspaceName: workspaceName,
-            rangeDescription: dateRange.label,
+            rangeDescription: contextDescription,
             partIndex: index + 1,
             totalParts: corpus.chunks.count
           )
@@ -104,7 +109,7 @@ final class AnalyticsCoordinator {
         turn = try await client.synthesizeSummary(
           chunkSummaries: chunkSummaries,
           workspaceName: workspaceName,
-          rangeDescription: dateRange.label,
+          rangeDescription: contextDescription,
           conversationCount: corpus.conversationCount,
           messageCount: corpus.messageCount
         )
@@ -188,7 +193,8 @@ final class AnalyticsCoordinator {
   }
 
   private func buildConversationCorpus(
-    in dateRange: AnalyticsSummaryDateRange
+    in dateRange: AnalyticsSummaryDateRange,
+    filterDescription: String?
   ) async throws -> AnalyticsConversationCorpus {
     try Task.checkCancellation()
 
@@ -230,6 +236,7 @@ final class AnalyticsCoordinator {
 
     let header = analyticsDocumentHeader(
       for: dateRange,
+      filterDescription: filterDescription,
       conversationCount: sections.count,
       messageCount: messageCount
     )
@@ -270,6 +277,7 @@ final class AnalyticsCoordinator {
       collected.append(
         contentsOf: uniqueItems.filter {
           conversation($0, overlaps: dateRange)
+            && conversationMatchesAnalyticsFilters($0)
         }
       )
 
@@ -298,6 +306,94 @@ final class AnalyticsCoordinator {
     dateRange: AnalyticsSummaryDateRange
   ) -> Bool {
     conversation.latestActivityDate >= dateRange.start
+  }
+
+  private func conversationMatchesAnalyticsFilters(
+    _ conversation: DashboardConversation
+  ) -> Bool {
+    if let channelFilter = store.channelFilter,
+       conversation.channel != channelFilter {
+      return false
+    }
+    if !store.priorityFilter.includes(conversation.priority) {
+      return false
+    }
+    if !store.statusFilter.includes(conversation.status) {
+      return false
+    }
+    if let appVersionFilter = store.appVersionFilter,
+       conversation.appVersionIndicatorText != appVersionFilter {
+      return false
+    }
+    if let gameIDFilter = store.gameIDFilter,
+       analyticsGameID(for: conversation) != gameIDFilter {
+      return false
+    }
+    for (key, expectedValue) in store.metadataFilters {
+      guard conversation.metadata?[key.rawValue] == expectedValue else {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  private func analyticsContextDescription(
+    for dateRange: AnalyticsSummaryDateRange
+  ) -> String {
+    guard let filterDescription = analyticsFilterDescription() else {
+      return dateRange.label
+    }
+
+    return "\(dateRange.label) • \(filterDescription)"
+  }
+
+  private func analyticsFilterDescription() -> String? {
+    var values: [String] = []
+
+    if let channelFilter = store.channelFilter {
+      values.append("Channel: \(InboxChannelFilterOption(value: channelFilter).label)")
+    }
+    if store.priorityFilter != .all {
+      values.append("Priority: \(store.priorityFilter.label)")
+    }
+    if store.statusFilter != .all {
+      values.append("Status: \(store.statusFilter.label)")
+    }
+    for (key, value) in store.metadataFilters.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+      values.append("\(key.label): \(value.dashboardDisplayText)")
+    }
+    if let appVersionFilter = store.appVersionFilter {
+      values.append("App Version: \(appVersionFilter)")
+    }
+    if let gameIDFilter = store.gameIDFilter {
+      values.append("Game: \(gameIDFilter)")
+    }
+
+    guard !values.isEmpty else { return nil }
+    return values.joined(separator: ", ")
+  }
+
+  private func analyticsGameID(
+    for conversation: DashboardConversation
+  ) -> String? {
+    analyticsMetadataText(
+      for: conversation,
+      keys: ["gameId", "gameID", "game_id"]
+    )
+  }
+
+  private func analyticsMetadataText(
+    for conversation: DashboardConversation,
+    keys: [String]
+  ) -> String? {
+    keys
+      .lazy
+      .compactMap { key in
+        guard let value = conversation.metadata?[key], value != .null else { return nil }
+        return value.dashboardDisplayText.nilIfEmpty
+      }
+      .first
   }
 
   private func buildConversationSection(
@@ -347,18 +443,28 @@ final class AnalyticsCoordinator {
 
   private func analyticsDocumentHeader(
     for dateRange: AnalyticsSummaryDateRange,
+    filterDescription: String?,
     conversationCount: Int,
     messageCount: Int
   ) -> String {
-    [
+    var lines = [
       "# Recent Support Conversation Digest",
       "",
       "- Workspace: \(workspaceName ?? "Cossistant")",
       "- Range: \(dateRange.label)",
+    ]
+
+    if let filterDescription {
+      lines.append("- Filters: \(filterDescription)")
+    }
+
+    lines.append(contentsOf: [
       "- Conversations: \(conversationCount)",
       "- Messages: \(messageCount)",
       "- Generated at: \(Date.now.formatted(.dateTime.year().month().day().hour().minute()))",
-    ].joined(separator: "\n")
+    ])
+
+    return lines.joined(separator: "\n")
   }
 
   private func analyticsSourceChunks(

@@ -1,10 +1,13 @@
 import SwiftUI
+import AppKit
+import SFSafeSymbols
 import CossistantAdmin
 
 struct ContactDetailPrototypeView: View {
   @Bindable var store: ContactsStore
   let contact: DashboardContact?
   let listItem: DashboardContactListItem?
+  let onShowContactConversations: (String) -> Void
 
   @State private var notesDraft = ""
   @State private var isSavingNotes = false
@@ -95,12 +98,39 @@ struct ContactDetailPrototypeView: View {
         }
       }
       .padding(24)
-      .frame(maxWidth: .infinity, alignment: .leading)
+      .frame(maxWidth: 980, alignment: .leading)
+      .frame(maxWidth: .infinity, alignment: .topLeading)
     }
   }
 
   @ViewBuilder
   private func contactHeader(_ contact: DashboardContact) -> some View {
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 16) {
+        contactHeaderIdentity(contact)
+
+        Spacer()
+
+        Button {
+          onShowContactConversations(contact.id)
+        } label: {
+          Label("Show Conversations", systemSymbol: .bubbleLeftAndBubbleRight)
+        }
+      }
+
+      VStack(alignment: .leading, spacing: 12) {
+        contactHeaderIdentity(contact)
+
+        Button {
+          onShowContactConversations(contact.id)
+        } label: {
+          Label("Show Conversations", systemSymbol: .bubbleLeftAndBubbleRight)
+        }
+      }
+    }
+  }
+
+  private func contactHeaderIdentity(_ contact: DashboardContact) -> some View {
     HStack(spacing: 16) {
       AvatarPreviewButton(
         name: contact.displayName,
@@ -112,10 +142,13 @@ struct ContactDetailPrototypeView: View {
       VStack(alignment: .leading, spacing: 4) {
         Text(contact.displayName)
           .font(.largeTitle.weight(.semibold))
+          .textSelection(.enabled)
 
         Text(contact.email ?? "No email yet")
           .font(.headline)
           .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .textSelection(.enabled)
       }
     }
   }
@@ -123,21 +156,21 @@ struct ContactDetailPrototypeView: View {
   @ViewBuilder
   private func identitySection(_ contact: DashboardContact) -> some View {
     PrototypeInfoCard(title: "Identity") {
-      PrototypeFact(label: "Email", value: contact.email ?? "Not set")
-      PrototypeFact(label: "External ID", value: contact.externalId ?? "Not set")
-      PrototypeFact(label: "Contact ID", value: contact.id)
+      ContactDetailFact(label: "Email", value: contact.email ?? "Not set")
+      ContactDetailFact(label: "External ID", value: contact.externalId ?? "Not set")
+      ContactDetailFact(label: "Contact ID", value: contact.id)
     }
   }
 
   @ViewBuilder
   private func contextSection(_ contact: DashboardContact) -> some View {
     PrototypeInfoCard(title: "Context") {
-      PrototypeFact(label: "Website", value: contact.websiteId)
-      PrototypeFact(label: "Organization", value: contact.organizationId)
-      PrototypeFact(label: "Created", value: contact.createdAbsoluteText)
-      PrototypeFact(label: "Updated", value: contact.updatedAbsoluteText)
-      PrototypeFact(label: "Last Seen", value: listItem?.lastSeenAbsoluteText ?? "Not seen yet")
-      PrototypeFact(label: "Visit Count", value: listItem.map { String($0.visitorCount) } ?? "Unknown")
+      ContactDetailFact(label: "Website", value: contact.websiteId)
+      ContactDetailFact(label: "Organization", value: contact.organizationId)
+      ContactDetailFact(label: "Created", value: contact.createdAbsoluteText)
+      ContactDetailFact(label: "Updated", value: contact.updatedAbsoluteText)
+      ContactDetailFact(label: "Last Seen", value: listItem?.lastSeenAbsoluteText ?? "Not seen yet")
+      ContactDetailFact(label: "Visit Count", value: listItem.map { String($0.visitorCount) } ?? "Unknown")
     }
   }
 
@@ -171,10 +204,10 @@ struct ContactDetailPrototypeView: View {
   private func organizationSection(_ contact: DashboardContact) -> some View {
     PrototypeInfoCard(title: "Organization") {
       if let organization = activeOrganization(for: contact) {
-        PrototypeFact(label: "Name", value: organization.name)
-        PrototypeFact(label: "Domain", value: organization.domain ?? "Not set")
-        PrototypeFact(label: "External ID", value: organization.externalId ?? "Not set")
-        PrototypeFact(label: "Description", value: organization.description ?? "Not set")
+        ContactDetailFact(label: "Name", value: organization.name)
+        ContactDetailFact(label: "Domain", value: organization.domain ?? "Not set")
+        ContactDetailFact(label: "External ID", value: organization.externalId ?? "Not set")
+        ContactDetailFact(label: "Description", value: organization.description ?? "Not set")
 
         HStack {
           Button("Edit") {
@@ -214,7 +247,7 @@ struct ContactDetailPrototypeView: View {
   private func metadataSection(_ metadata: DashboardMetadata) -> some View {
     PrototypeInfoCard(title: "Metadata") {
       ForEach(metadata.dashboardSortedEntries, id: \.0) { key, value in
-        PrototypeFact(label: key, value: value.dashboardDisplayText)
+        ContactDetailFact(label: key, value: value.dashboardDisplayText)
       }
     }
   }
@@ -254,5 +287,32 @@ struct ContactDetailPrototypeView: View {
     guard let atIndex = email.firstIndex(of: "@") else { return nil }
     let domain = email[email.index(after: atIndex)...]
     return domain.isEmpty ? nil : String(domain)
+  }
+}
+
+private struct ContactDetailFact: View {
+  let label: String
+  let value: String
+
+  var body: some View {
+    LabeledContent {
+      Text(value)
+        .font(.body)
+        .multilineTextAlignment(.trailing)
+        .textSelection(.enabled)
+        .contextMenu {
+          Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(value, forType: .string)
+          } label: {
+            Label("Copy Value", systemSymbol: .documentOnDocument)
+          }
+        }
+    } label: {
+      Text(label)
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .textSelection(.enabled)
+    }
   }
 }

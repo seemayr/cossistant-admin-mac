@@ -84,6 +84,7 @@ struct OpenAIConversationResolutionClient {
     let category: String
     let title: String
     let body: String
+    let summary: String
   }
 
   private static let model = "gpt-5-mini"
@@ -127,11 +128,13 @@ struct OpenAIConversationResolutionClient {
     unknown
     Escalating to a human or promising a later action does not resolve the issue.
     If you are unsure, choose NOT_RESOLVED.
-    Return exactly four lines:
-    VERDICT: RESOLVED or NOT_RESOLVED
-    CATEGORY: one category from the allowed list
-    TITLE: a short English title on one line
-    BODY: one or two short English sentences on one line
+    Also write a concise support-inbox summary in English.
+    The summary should describe what the visitor is asking about or reporting, similar to an email subject plus one short sentence.
+    Keep the summary to one or two short sentences on one line.
+    Do not mention whether the conversation is resolved unless that is essential to understanding the request.
+    Example summaries:
+    "WebGL error on game start, happens on all games."
+    "Can't see joined groups, even after admin accepted them."
     """
 
     let userPrompt = """
@@ -154,7 +157,7 @@ struct OpenAIConversationResolutionClient {
           content: [.init(type: "input_text", text: userPrompt)]
         ),
       ],
-      maxOutputTokens: 400,
+      maxOutputTokens: 500,
       reasoning: .init(effort: "low"),
       text: .init(
         format: .init(
@@ -240,12 +243,14 @@ struct OpenAIConversationResolutionClient {
     let title = verdict.title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
       ?? (isResolved ? "Resolved conversation" : "Not resolved")
     let body = verdict.body.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? normalized
+    let summary = Self.normalizedSingleLine(verdict.summary) ?? body
 
     return OpenAIConversationResolutionVerdict(
       isResolved: isResolved,
       category: category,
       title: title,
       body: body,
+      summary: summary,
       rawResponseText: normalized
     )
   }
@@ -292,8 +297,18 @@ struct OpenAIConversationResolutionClient {
       category: category,
       title: title,
       body: body,
+      summary: Self.normalizedSingleLine(body) ?? title,
       rawResponseText: normalized
     )
+  }
+
+  private static func normalizedSingleLine(_ value: String) -> String? {
+    let normalized = value
+      .components(separatedBy: .whitespacesAndNewlines)
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
+
+    return normalized.nilIfEmpty
   }
 
   private func extractResponseText(from data: Data) -> String? {
@@ -397,8 +412,13 @@ struct OpenAIConversationResolutionClient {
         description: "One or two short English sentences explaining the verdict.",
         enumValues: nil
       ),
+      "summary": Property(
+        type: "string",
+        description: "One or two short English sentences describing what the visitor is asking about or reporting.",
+        enumValues: nil
+      ),
     ],
-    required: ["verdict", "category", "title", "body"],
+    required: ["verdict", "category", "title", "body", "summary"],
     additionalProperties: false
   )
 }

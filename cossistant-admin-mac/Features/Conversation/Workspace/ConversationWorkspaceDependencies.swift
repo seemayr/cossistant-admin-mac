@@ -5,6 +5,7 @@ struct ConversationWorkspaceControls: Sendable {
   let canUseMessageTranslations: Bool
   let canUseConversationDraftTranslation: Bool
   let showTranslations: Bool
+  let showBackendTranslatedSubjects: Bool
   let isTranslatingMessages: Bool
   let translationErrorMessage: String?
   let showInspector: Bool
@@ -25,8 +26,8 @@ struct ConversationWorkspaceActions: Sendable {
     [DashboardComposerAttachment]
   ) async -> Void
   typealias ReplyDraftAction = @MainActor @Sendable (String) async -> String?
-  typealias FAQReplyDraftAction = @MainActor @Sendable (DashboardKnowledge) async -> String?
-  typealias FAQLoadAction = @MainActor @Sendable (String?) async throws -> [DashboardKnowledge]
+  typealias FAQReplyDraftAction = @MainActor @Sendable (DashboardKnowledge, DashboardConversation.ID) async -> String?
+  typealias FAQLoadAction = @MainActor @Sendable (String?, Bool) async throws -> [DashboardKnowledge]
   typealias DraftTranslationAction = @MainActor @Sendable (String) async throws -> DashboardMessageTranslation
   typealias TitleUpdateAction = @MainActor @Sendable (String?) async -> Void
   typealias MetadataUpdateAction = @MainActor @Sendable (DashboardMetadata) async throws -> Void

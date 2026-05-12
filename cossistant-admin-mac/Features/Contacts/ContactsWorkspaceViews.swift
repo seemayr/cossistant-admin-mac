@@ -13,14 +13,20 @@ struct ContactsListView: View {
         ContactListRow(contact: contact)
           .tag(contact.id)
       }
+      .listStyle(.inset(alternatesRowBackgrounds: false))
       .overlay {
         if store.isLoadingList {
           ProgressView("Loading contacts…")
         } else if store.items.isEmpty {
-          ContactsEmptyState()
+          if store.searchText.isEmpty {
+            ContactsEmptyState()
+          } else {
+            ContentUnavailableView.search(text: store.searchText)
+          }
         }
       }
     }
     .searchable(text: $store.searchText, prompt: "Search contacts, email, metadata")
+    .navigationTitle("Contacts")
   }
 }
